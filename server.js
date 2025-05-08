@@ -50,7 +50,7 @@ You are an expert developer. Generate code following these rules:
    - Add command descriptions
    - Include error handling
    - Add required imports
-7. ALWAYS add a script_function() at the end to call the script and not interfere with other scripts
+7. ALWAYS add a unique_script_function() at the end to call the script and not interfere with other scripts
 
 Example:
 \`\`\`python
