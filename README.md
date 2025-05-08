@@ -22,12 +22,8 @@ A local server that uses OpenRouter's API to generate code for Nighty scripts. T
    ```bash
    npm install
    ```
-3. Create a `.env` file based on `.env.example`:
-   ```bash
-   cp .env.example .env
-   ```
-4. Add your OpenRouter API key to the `.env` file
-5. Start the server:
+3. Add your OpenRouter API key to the `.env` file
+4. Start the server:
    ```bash
    node server.js
    ```
@@ -53,7 +49,6 @@ To use this with Nighty, place the `generate_code.py` script in your Nighty scri
 The server supports all models available through OpenRouter. Some recommended models:
 - `meta-llama/llama-4-maverick:free`
 - `deepseek/deepseek-chat-v3-0324:free`
-- `mistralai/mistral-small-3.1-24b-instruct:free`
 
 ## License
 
