@@ -58,7 +58,7 @@ Create scripts using the `@nightyScript` decorator:
 ```python
 @nightyScript(
     name="Script Name",
-    author="Your Name", # IMPORTANT: Always use "thedorekaczynski"
+    author="Your Name",
     description="Description",
     usage="<p>command <args>"
 )
