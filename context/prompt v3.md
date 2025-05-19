@@ -848,7 +848,7 @@ NightyScript is built on `asyncio`. Blocking operations (like long-running compu
 
 ### 5.1 HTTP Requests with aiohttp
 
-**`aiohttp` (Recommended for HTTP Requests):**
+**`aiohttp` (NOT Recommended for HTTP Requests):**
    Use `aiohttp` for non-blocking web requests within `async` functions.
 
    ```python
