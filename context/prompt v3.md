@@ -1,4 +1,4 @@
-# NightyScript Documentation v4.3 (Public)
+# NightyScript Documentation v4.4 (Public)
 
 **Created by:** thedorekaczynski
 
@@ -58,7 +58,7 @@ Create scripts using the `@nightyScript` decorator:
 ```python
 @nightyScript(
     name="Script Name",
-    author="Your Name",
+    author="Your Name", # IMPORTANT: Always use "thedorekaczynski"
     description="Description",
     usage="<p>command <args>"
 )
@@ -526,127 +526,66 @@ NightyScript provides several ways to send messages:
    - **The only way to send rich embed messages.** Do *not* attempt to use `discord.Embed`.
    - Sends an embed to a *specific* channel ID.
    - Requires keyword arguments.
+   - **WARNING:** Only supports a limited set of parameters. Using unsupported parameters will raise errors like "unexpected keyword argument".
 
    ```python
    # Example within a command context
    await forwardEmbedMethod(
-       channel_id=ctx.channel.id, # Target the command's channel
-       content="Optional text content **outside** the embed.", # Supports Markdown
-       title="This is the Embed Title",
-       description="This is the main embed body.\nSupports **Markdown** and [links](https://example.com).",
-       # color=0x3498db, # Optional: Integer color code (Hex: 0xRRGGBB) - Currently may not be supported reliably.
-       image="https://example.com/image.png", # Optional: URL of an image to display large
-       thumbnail="https://example.com/thumb.png" # Optional: URL of a smaller thumbnail image
-       # footer={"text": "Footer text", "icon_url": "https://example.com/icon.png"} # Optional: Footer - Currently may not be supported reliably.
-       # fields=[ # Optional: List of fields - Currently may not be supported reliably.
-       #     {"name": "Field 1 Title", "value": "Field 1 Value", "inline": True},
-       #     {"name": "Field 2 Title", "value": "Field 2 Value", "inline": True}
-       # ]
+       channel_id=ctx.channel.id, # Target the command's channel (REQUIRED)
+       content="# Important Announcement\n\n**Bold text** and *italic text*\n\n> Important note here\n\n- Bullet point 1\n- Bullet point 2\n  - Nested bullet\n\n1. Numbered item\n2. Second item\n\n[Link to documentation](https://example.com)", # Text with markdown formatting
+       title="Message Title", # Optional title for the embed
+       image="https://example.com/image.png" # Optional URL of an image to display
    )
 
    # Example within an event listener (sending to a specific log channel)
    log_channel_id = "123456789012345678" # Get from config or JSON
    await forwardEmbedMethod(
        channel_id=log_channel_id,
-       title="Event Logged",
-       description=f"User {message.author.mention} triggered an event.",
-       # ... other embed parameters ...
+       content=f"# Event Detected\n\n**User:** {message.author}\n**Time:** {message.created_at}\n\n> Message content: {message.content}"
    )
    ```
 
-   **`forwardEmbedMethod` Parameters:**
+   **`forwardEmbedMethod` Supported Parameters:**
    - `channel_id`: (Required) The ID of the target channel (string or integer).
-   - `content`: (Optional) Text message content sent alongside the embed.
+   - `content`: (Optional) Text message content with markdown support (see below).
    - `title`: (Optional) The title of the embed.
-   - `description`: (Optional) The main text content of the embed (Markdown supported).
    - `image`: (Optional) URL for a large image within the embed.
-   - `thumbnail`: (Optional) URL for a small thumbnail image in the corner.
-   - `color`, `footer`, `fields`: While part of standard embeds, these might have limited or no support in `forwardEmbedMethod`. Test carefully. Use `title`, `description`, `image`, and `thumbnail` primarily.
+
+   **Supported Markdown in `content`:**
+   - Headings: `# Heading 1`, `## Heading 2`, etc. (only first level renders properly)
+   - Text formatting: `**bold**`, `*italic*`, `__underline__`, `~~strikethrough~~`
+   - Block quotes: `> quoted text`
+   - Lists: Bullet points with `-` and numbered lists with `1.`, `2.`, etc.
+   - Nested lists: Indent with spaces for nested bullets
+   - Links: `[link text](https://example.com)`
+
+   **WARNING:** Parameters like `thumbnail`, `description`, `color`, `footer`, and `fields` are **NOT supported** and will cause errors. To create formatted messages, use markdown within the `content` parameter instead.
 
 #### 4.6.3 Disabling Private Mode for Embeds
 
-   Nighty's "private mode" can sometimes interfere with sending embeds, especially if the script fetches external data. To ensure delivery, temporarily disable it:
+Nighty's "private mode" can block outgoing messages like embeds — especially when the script pulls from external sources.  
+To ensure your embed sends successfully, **temporarily disable private mode** during the send.
 
-   ```python
-   # Save current private setting
-   current_private_setting = getConfigData().get("private", False) # Default to False if not set
+```python
+# Backup current private mode setting (could be True, False, or None)
+current_private = getConfigData().get("private")
 
-   try:
-       # Temporarily disable private mode if it was enabled
-       if current_private_setting:
-           updateConfigData("private", False)
+# Disable private mode
+updateConfigData("private", False)
 
-       # --- Send the embed ---
-       await forwardEmbedMethod(
-           channel_id=ctx.channel.id,
-           title="Important Update",
-           description="Data fetched and displayed.",
-           image="some_image_url"
-       )
-       # --- Embed sent ---
-
-   except Exception as e:
-       print(f"Error sending embed: {e}", type_="ERROR")
-       # Optionally send a plain text error to the user
-       # await ctx.send("Failed to send embed message.")
-   finally:
-       # --- IMPORTANT: Restore the original private setting ---
-       # Check if the setting was originally different from the current one before restoring
-       if getConfigData().get("private") != current_private_setting:
-            updateConfigData("private", current_private_setting)
-
-   ```
-   *Self-correction:* The `finally` block should restore the *original* setting regardless of its current state, in case an error occurred *before* the `updateConfigData("private", False)` line executed fully or if another part of the code changed it unexpectedly. Simplified the finally block.
-
-   ```python
-   # (Inside an async function)
-   current_private_setting = getConfigData().get("private") # Get original value (could be None, True, False)
-
-   try:
-       # Disable private mode before sending
-       updateConfigData("private", False)
-
-       # Send the embed
-       await forwardEmbedMethod(
-           channel_id=ctx.channel.id,
-           content="Embed Content",
-           title="Embed Title"
-       )
-
-   except Exception as e:
-       print(f"Error during embed sending: {e}", type_="ERROR")
-   finally:
-       # ALWAYS restore the original setting in the finally block
-       # This ensures it's restored even if errors occur
-       if current_private_setting is not None: # Only restore if it was explicitly set before
-           updateConfigData("private", current_private_setting)
-       else:
-           # If 'private' was never set, perhaps remove the key or set to a default 'False'?
-           # Or simply do nothing if None means default behavior. For safety, explicitly setting to False:
-           updateConfigData("private", False) # Or handle how 'None' should be treated
-   ```
-   *Self-correction 2:* The goal is simply to ensure the embed sends and then restore the *exact previous state*. The first example's logic was simpler and safer. Revert to that structure.
-
-   ```python
-    # Save current private setting and update it to False (disable private mode)
-    current_private = getConfigData().get("private") # Will be None if not set, or True/False
-    updateConfigData("private", False)
-
-    try:
-        # Send the embed message
-        await forwardEmbedMethod(
-            channel_id=ctx.channel.id,
-            content="Your embed content",
-            title="Your Embed Title",
-            # ... other parameters
-        )
-    except Exception as e:
-        print(f"Failed to send embed: {e}", type_="ERROR")
-        # Optionally inform the user via ctx.send
-    finally:
-        # Restore the original private setting, whatever it was (None, True, or False)
-        updateConfigData("private", current_private)
-   ```
+try:
+    # Send the embed
+    await forwardEmbedMethod(
+        channel_id=ctx.channel.id,
+        content="Your embed content",
+        title="Your Embed Title"
+    )
+except Exception as e:
+    print(f"Failed to send embed: {e}", type_="ERROR")
+finally:
+    # Always restore the original private setting (even if it was None)
+    updateConfigData("private", current_private)
+```
 
 ### 4.7 Webhook Integration
 
@@ -909,7 +848,7 @@ NightyScript is built on `asyncio`. Blocking operations (like long-running compu
 
 ### 5.1 HTTP Requests with aiohttp
 
-**`aiohttp` (NOT Recommended for HTTP Requests):**
+**`aiohttp` (Recommended for HTTP Requests):**
    Use `aiohttp` for non-blocking web requests within `async` functions.
 
    ```python
