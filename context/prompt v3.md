@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-NightyScript extends Nighty (a Discord selfbot) with custom Python scripts. Scripts define commands and event handlers. Nighty manages the Discord connection; scripts focus purely on functionality.
+NightyScript extends Nighty (a Discord selfbot) with custom Python scripts. Scripts define commands and event handlers. Nighty manages the Discord connection; scripts focus purely on functionality. It is built on a modified version of the discord.py-self library.
 
 **Do not** use standard `discord.py` libraries directly, except as documented.
 
@@ -365,6 +365,20 @@ If no subcommand is matched, performs the default action (e.g., fetching data fo
 -   **Consistent Parsing**: Handle arguments (`subargs`) consistently across subcommands.
 -   **Error Handling**: Provide clear messages for invalid subcommands or missing arguments.
 -   **Documentation**: Update the main script docstring and the command's `usage`/`description` to reflect the subcommand structure.
+
+#### 4.3.2 Sending Stickers
+
+Discord allows bots to send both built-in and custom stickers. Use the `stickers` parameter of `ctx.send` and retrieve the sticker from the cache before falling back to an HTTP fetch. This avoids unnecessary network calls and speeds up repeat usage.
+
+```python
+STICKER_ID = 749054660769218631  # example ID for the "wave" sticker
+sticker = bot.get_sticker(STICKER_ID)
+if not sticker:
+    sticker = await bot.fetch_sticker(STICKER_ID)
+await ctx.send(stickers=[sticker])
+```
+
+`bot.get_sticker` returns `None` if the sticker is not cached. For custom stickers—those uploaded to a guild you have access to—you may need to fetch them the first time with `fetch_sticker`. Once fetched, they remain in the cache for subsequent calls to `get_sticker`.
 
 ### 4.4 Event Listeners (@bot.listen)
 
