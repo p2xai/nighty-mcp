@@ -9,7 +9,6 @@ import json
 import os
 import re
 import shlex
-import product_formatter
 
 # Ensure this script's directory is on sys.path so sibling modules load
 # correctly when executed from elsewhere.
@@ -17,7 +16,10 @@ _MODULE_DIR = Path(__file__).resolve().parent
 if str(_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_MODULE_DIR))
 
-import product_formatter
+try:
+    import product_formatter
+except ImportError:  # pragma: no cover - safe fallback if missing
+    product_formatter = None
 
 @nightyScript(
     name="Channel Importer",
@@ -260,7 +262,7 @@ def channel_importer():
                 text = remove_lines_with_words(text, opts['omit_words'])
                 for old, new in opts['replacements'].items():
                     text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
-                if opts.get('format_product'):
+                if opts.get('format_product') and product_formatter:
                     text = await product_formatter.format_description(text)
                 trend_line = f"Tendencia [{get_message_date(msg)}]"
                 if opts['signature']:
