@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 import requests
 import shlex
+import json
 
 @nightyScript(
     name="News Alerts",
@@ -37,12 +38,23 @@ def noticias_script():
     - Obtén una API key gratis en https://newsapi.org/ y colócala en la variable de entorno NEWS_API_KEY.
     - Los mensajes incluyen la fecha y título de cada artículo con su URL.
     - Schedulenews permite publicar noticias de forma periódica cada N horas.
+    - Las URLs enviadas se guardan en `noticias_seen.json` para evitar duplicados en futuras ejecuciones.
     """
 
     API_KEY = os.getenv("NEWS_API_KEY", "")
     BASE_URL = "https://newsapi.org/v2/top-headlines"
 
     scheduled_tasks = {}
+
+    SEEN_FILE = "noticias_seen.json"
+    if os.path.exists(SEEN_FILE):
+        try:
+            with open(SEEN_FILE, "r", encoding="utf-8") as fp:
+                posted_urls = set(json.load(fp))
+        except Exception:
+            posted_urls = set()
+    else:
+        posted_urls = set()
 
     async def run_in_thread(func, *args, **kwargs):
         loop = asyncio.get_event_loop()
@@ -69,9 +81,12 @@ def noticias_script():
         roles = opts.get("mention_roles") or []
         if roles:
             mention = " ".join(f"<@&{r}>" for r in roles)
+        updated = False
         for art in articles:
             title = art.get("title", "Sin título")
             url = art.get("url", "")
+            if not url or url in posted_urls:
+                continue
             date = art.get("publishedAt", "")
             try:
                 date = datetime.fromisoformat(date.rstrip("Z")).strftime("%Y-%m-%d")
@@ -82,7 +97,15 @@ def noticias_script():
             if mention:
                 text = f"{mention}\n{text}"
             await channel.send(text)
+            posted_urls.add(url)
+            updated = True
             await asyncio.sleep(0.3)
+        if updated:
+            try:
+                with open(SEEN_FILE, "w", encoding="utf-8") as fp:
+                    json.dump(list(posted_urls), fp)
+            except Exception:
+                pass
 
     def parse_args(parts):
         opts = {"limit": 5, "mention_roles": []}
