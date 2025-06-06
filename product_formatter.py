@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 import asyncio
 import re
+import builtins
+import types
 try:
     import requests
 except Exception:  # pragma: no cover - optional dependency
@@ -16,6 +18,12 @@ except Exception:  # pragma: no cover - optional dependency
 _MODULE_DIR = Path(__file__).resolve().parent
 if str(_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_MODULE_DIR))
+
+# Provide no-op defaults when running outside Nighty
+if not hasattr(builtins, "nightyScript"):
+    builtins.nightyScript = lambda *a, **k: (lambda f: f)
+if not hasattr(builtins, "bot"):
+    builtins.bot = types.SimpleNamespace(command=lambda *a, **k: (lambda f: f))
 
 @nightyScript(
     name="Product Formatter",
@@ -178,3 +186,6 @@ def product_formatter():
         await ctx.send(result)
 
 product_formatter()
+
+if __name__ == "__main__":  # pragma: no cover - manual execution
+    pass
