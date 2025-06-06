@@ -64,7 +64,8 @@ def channel_importer():
         emoji_lib = None
     import shlex
 
-    # almacenamiento de importaciones programadas { (src_id, dest_id): Loop }
+    # almacenamiento de importaciones programadas
+    # { (src_id, dest_id): {"task": asyncio.Task, "last_time": datetime|None} }
     scheduled_jobs = {}
     # roleposts activos {message_id: {"channel_id": int, "pairs": [{"role_id": int, "emoji": str}]}}
     reaction_roles = {}
@@ -175,6 +176,7 @@ def channel_importer():
 
         try:
             msgs = []
+            latest_time = None
             async for msg in src_channel.history(limit=opts['limit'], oldest_first=True, after=opts['after_date'], before=opts['before_date']):
                 text = msg.content
                 if any(word.lower() in text.lower() for word in opts['skip_words']):
@@ -198,12 +200,14 @@ def channel_importer():
                         except Exception as e:
                             print(f"Error leyendo adjunto: {e}", type_="ERROR")
                 msgs.append((text, files))
+                if latest_time is None or msg.created_at > latest_time:
+                    latest_time = msg.created_at
         except Exception as e:
             if ctx:
                 await ctx.send(f"Error obteniendo mensajes: {e}")
             else:
                 print(f"Error obteniendo mensajes: {e}")
-            return
+            return None
 
         for content, files in msgs:
             if content or files:
@@ -215,6 +219,8 @@ def channel_importer():
                 except Exception as e:
                     print(f"Error enviando mensaje: {e}", type_="ERROR")
                     await asyncio.sleep(1)
+
+        return latest_time
 
 
 
@@ -271,8 +277,8 @@ def channel_importer():
         await ctx.message.delete()
         if args.strip() == "stop":
             if scheduled_jobs:
-                for loop in scheduled_jobs.values():
-                    loop.cancel()
+                for data in scheduled_jobs.values():
+                    data['task'].cancel()
                 scheduled_jobs.clear()
                 await ctx.send("Todas las importaciones programadas fueron detenidas.")
             else:
@@ -316,16 +322,19 @@ def channel_importer():
             return
         key = (opts['source_id'], opts['dest_id'])
         if key in scheduled_jobs:
-            scheduled_jobs[key].cancel()
+            scheduled_jobs[key]['task'].cancel()
         job_opts = opts.copy()
 
         async def loop_job():
             while True:
-                await do_import(job_opts)
+                new_time = await do_import(job_opts)
+                if new_time:
+                    scheduled_jobs[key]['last_time'] = new_time
+                    job_opts['after_date'] = new_time
                 await asyncio.sleep(interval * 3600)
 
         task = asyncio.create_task(loop_job())
-        scheduled_jobs[key] = task
+        scheduled_jobs[key] = {"task": task, "last_time": job_opts.get('after_date')}
         await ctx.send(
             f"Importación programada cada {interval}h para {key[0]} -> {key[1]}."
         )
@@ -470,15 +479,15 @@ def channel_importer():
                 await ctx.send("IDs inválidos.")
                 return
             key = (src, dst)
-            task = scheduled_jobs.pop(key, None)
-            if task:
-                task.cancel()
+            data = scheduled_jobs.pop(key, None)
+            if data:
+                data['task'].cancel()
                 await ctx.send(f"Importación {src}->{dst} detenida.")
             else:
                 await ctx.send("No existe importación programada para esos canales.")
         else:
-            for task in scheduled_jobs.values():
-                task.cancel()
+            for data in scheduled_jobs.values():
+                data['task'].cancel()
             scheduled_jobs.clear()
             await ctx.send("Todas las importaciones programadas fueron detenidas.")
 
@@ -492,7 +501,7 @@ def channel_importer():
         lines = []
         if scheduled_jobs:
             lines.append("Importaciones programadas:")
-            for (src, dst) in scheduled_jobs.keys():
+            for (src, dst), data in scheduled_jobs.items():
                 lines.append(f"- {src} -> {dst}")
         else:
             lines.append("No hay importaciones programadas.")
