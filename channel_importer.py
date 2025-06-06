@@ -262,7 +262,7 @@ def channel_importer():
                 text = remove_lines_with_words(text, opts['omit_words'])
                 for old, new in opts['replacements'].items():
                     text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
-                if opts.get('format_product'):
+                if opts.get('format_product') and product_formatter:
                     text = await product_formatter.format_description(text)
                 trend_line = f"Tendencia [{get_message_date(msg)}]"
                 if opts['signature']:
