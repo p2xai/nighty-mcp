@@ -28,6 +28,18 @@ A local server that uses OpenRouter's API to generate code for Nighty scripts. T
    node server.js
    ```
 
+## Python Dependencies
+
+The helper scripts such as `channel_importer.py` and `product_formatter.py`
+require Python 3 with the `requests` library installed. Install it with:
+
+```bash
+pip install requests
+```
+
+If `requests` is not available, product formatting will fall back to a basic
+"Unknown" result when querying the local MCP server.
+
 ## Usage
 
 The server runs on `http://localhost:3000` by default. It accepts POST requests to `/generate` with the following JSON body:
