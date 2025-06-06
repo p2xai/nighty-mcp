@@ -1,8 +1,18 @@
 # -*- coding: utf-8 -*-
+"""Utility to format product descriptions for Discord."""
+
+from pathlib import Path
+import sys
 import asyncio
 import re
 import requests
 import discord
+
+# Ensure this script's directory is on sys.path so sibling modules can be
+# imported even if executed from another location.
+_MODULE_DIR = Path(__file__).resolve().parent
+if str(_MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(_MODULE_DIR))
 
 @nightyScript(
     name="Product Formatter",
