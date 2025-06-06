@@ -1,8 +1,18 @@
 # -*- coding: utf-8 -*-
+"""Utility to format product descriptions for Discord."""
+
+from pathlib import Path
+import sys
 import asyncio
 import re
 import requests
 import discord
+
+# Ensure this script's directory is on sys.path so sibling modules can be
+# imported even if executed from another location.
+_MODULE_DIR = Path(__file__).resolve().parent
+if str(_MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(_MODULE_DIR))
 
 @nightyScript(
     name="Product Formatter",
@@ -120,6 +130,35 @@ def product_formatter():
             parts.append(p)
         return " ".join(parts)
 
+    # expose helper
+    globals()["remove_price_sections"] = remove_price_sections
+
+    async def format_description(text: str) -> str:
+        """Return a formatted product description."""
+        if not text.strip():
+            return ""
+
+        cleaned = re.sub(r"\b\d{4}[-/]\d{2}[-/]\d{2}\b", "", text)
+        cleaned = re.sub(r"Keyword.*$", "", cleaned, flags=re.I | re.S).strip()
+        price_info = parse_prices(cleaned)
+        title = remove_price_sections(cleaned, price_info.keys()).strip()
+        category = await run_in_thread(
+            call_mcp,
+            f"Categorize this product title: {title}. Only return the category."
+        )
+
+        lines = [f"**{title}**", f"_Category: {category}_", ""]
+        for code, vals in price_info.items():
+            flag = FLAG_MAP.get(code, code)
+            shipping = (
+                f" + {vals['shipping']} shipping" if vals['shipping'] != "N/A" else ""
+            )
+            lines.append(f"{flag} {vals['price']}{shipping}")
+        return "\n".join(lines)
+
+    # expose for external use
+    globals()["format_description"] = format_description
+
     @bot.command(
         name="formatproduct",
         description="Format a raw product description",
@@ -127,21 +166,10 @@ def product_formatter():
     )
     async def formatproduct(ctx, *, args: str):
         await ctx.message.delete()
-        if not args.strip():
+        result = await format_description(args)
+        if not result:
             await ctx.send("Provide a description.")
             return
-
-        cleaned = re.sub(r"\b\d{4}[-/]\d{2}[-/]\d{2}\b", "", args)
-        cleaned = re.sub(r"Keyword.*$", "", cleaned, flags=re.I | re.S).strip()
-        price_info = parse_prices(cleaned)
-        title = remove_price_sections(cleaned, price_info.keys()).strip()
-        category = await run_in_thread(call_mcp, f"Categorize this product title: {title}. Only return the category.")
-
-        lines = [f"**{title}**", f"_Category: {category}_", ""]
-        for code, vals in price_info.items():
-            flag = FLAG_MAP.get(code, code)
-            shipping = f" + {vals['shipping']} shipping" if vals['shipping'] != "N/A" else ""
-            lines.append(f"{flag} {vals['price']}{shipping}")
-        await ctx.send("\n".join(lines))
+        await ctx.send(result)
 
 product_formatter()

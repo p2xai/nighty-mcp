@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+"""Discord channel import utilities."""
+
+from pathlib import Path
+import sys
 import asyncio
 from datetime import datetime
 import json
@@ -6,11 +10,19 @@ import os
 import re
 import shlex
 
+# Ensure this script's directory is on sys.path so sibling modules load
+# correctly when executed from elsewhere.
+_MODULE_DIR = Path(__file__).resolve().parent
+if str(_MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(_MODULE_DIR))
+
+import product_formatter
+
 @nightyScript(
     name="Channel Importer",
     author="thedorekaczynski",
     description="Importa mensajes de un canal a otro con opciones de filtrado y reemplazo.",
-    usage="<p>importmsgs --source <src_id> --dest <dest_id> [--limit <n>] [--skip word1,word2] [--replace old=new,...] [--remove-lines 1,2] [--omit-lines-with w1,w2] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--include-files] [--signature text] [--mention-role id1,id2]"
+    usage="<p>importmsgs --source <src_id> --dest <dest_id> [--limit <n>] [--skip word1,word2] [--replace old=new,...] [--remove-lines 1,2] [--omit-lines-with w1,w2] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--include-files] [--signature text] [--mention-role id1,id2] [--format-product]"
 )
 def channel_importer():
     """
@@ -19,9 +31,9 @@ def channel_importer():
     Copia mensajes de un canal de Discord a otro con filtros personalizables.
 
     COMMANDS:
-        <p>importmsgs --source <src_id> --dest <dest_id> [--limit <n>] [--skip w1,w2] [--replace old=new] [--remove-lines 1,2] [--omit-lines-with w1,w2] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--include-files] [--signature text]
+        <p>importmsgs --source <src_id> --dest <dest_id> [--limit <n>] [--skip w1,w2] [--replace old=new] [--remove-lines 1,2] [--omit-lines-with w1,w2] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--include-files] [--signature text] [--format-product]
         <p>importmsgs stop
-        <p>scheduleimport --source <src_id> --dest <dest_id> [opciones] [--interval h]
+        <p>scheduleimport --source <src_id> --dest <dest_id> [opciones] [--interval h] [--format-product]
         <p>stopimport [--source <src_id> --dest <dest_id>]
         <p>status
         <p>rolepost --channel <id> --role <role_id> --emoji 🙂 [--role id2 --emoji :grinning: ...] --text "mensaje"
@@ -39,13 +51,16 @@ def channel_importer():
             --include-files       Adjuntar también los archivos de cada mensaje.
             --signature text      Añadir esta firma al final de cada mensaje copiado.
             --mention-role id1,id2 Menciona estos roles al enviar cada mensaje importado.
+            --format-product      Formatear cada mensaje como producto.
     - Puedes ejecutar `scheduleimport` varias veces para programar importaciones de distintos canales simultáneamente. Usa `stopimport` con los IDs para cancelar una en particular o sin argumentos para detenerlas todas.
 
     EXAMPLES:
         <p>importmsgs --source 123 --dest 456 --skip spam --replace hola=hi --include-files
         <p>importmsgs --source 111 --dest 222 --limit 20 --remove-lines 1 --after 2024-01-01 --signature "Copiado"
         .importmsgs --source 1162281353216262154 --dest 1379868551367757935 --replace Goshippro=Hause --remove-lines 8 --limit 1 --include-files
+        <p>importmsgs --source 321 --dest 654 --format-product
         <p>scheduleimport --source 123 --dest 456 --interval 24 --include-files
+        <p>scheduleimport --source 999 --dest 888 --format-product
         <p>importmsgs stop
         <p>rolepost --channel 123 --role 789 --emoji 👍 --role 1011 --emoji 🔥 --text "Acepta las reglas"
         <p>loadrolepost --message 123456789012345678
@@ -137,6 +152,7 @@ def channel_importer():
         include_files = False
         signature = ""
         mention_roles = []
+        format_product = False
         error = None
 
         def consume_option(opt: str):
@@ -159,6 +175,9 @@ def channel_importer():
         after_val = consume_option('--after')
         before_val = consume_option('--before')
         sig_val = consume_option('--signature')
+        if '--format-product' in parts:
+            format_product = True
+            parts.remove('--format-product')
         if '--include-files' in parts:
             include_files = True
             parts.remove('--include-files')
@@ -218,6 +237,7 @@ def channel_importer():
             'include_files': include_files,
             'signature': signature,
             'mention_roles': mention_roles,
+            'format_product': format_product,
         }, error
 
     async def do_import(opts, ctx=None):
@@ -239,6 +259,8 @@ def channel_importer():
                 text = remove_lines_with_words(text, opts['omit_words'])
                 for old, new in opts['replacements'].items():
                     text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
+                if opts.get('format_product'):
+                    text = await product_formatter.format_description(text)
                 trend_line = f"Tendencia [{get_message_date(msg)}]"
                 if opts['signature']:
                     text = f"{text}\n{opts['signature']}" if text else opts['signature']
@@ -334,7 +356,7 @@ def channel_importer():
     @bot.command(
         name="importmsgs",
         description="Importa mensajes de un canal a otro con filtros opcionales.",
-        usage="--source <src_id> --dest <dest_id> [--limit <n>] [--skip w1,w2] [--replace old=new] [--remove-lines 1,2] [--omit-lines-with w1,w2] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--include-files] [--signature text] [--mention-role id1,id2]"
+        usage="--source <src_id> --dest <dest_id> [--limit <n>] [--skip w1,w2] [--replace old=new] [--remove-lines 1,2] [--omit-lines-with w1,w2] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--include-files] [--signature text] [--mention-role id1,id2] [--format-product]"
     )
     async def importmsgs(ctx, *, args: str):
         await ctx.message.delete()
@@ -360,7 +382,7 @@ def channel_importer():
     @bot.command(
         name="scheduleimport",
         description="Programa la importación periódica de mensajes.",
-        usage="--source <src_id> --dest <dest_id> [opciones] [--interval h]"
+        usage="--source <src_id> --dest <dest_id> [opciones] [--interval h] [--format-product]"
     )
     async def scheduleimport(ctx, *, args: str):
         await ctx.message.delete()

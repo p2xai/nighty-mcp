@@ -27,9 +27,7 @@ import product_formatter
 importlib.reload(product_formatter)  # ensure decorator capture
 
 parse_prices = product_formatter.parse_prices
-_formatproduct_fn = _captured['formatproduct']
-_free_vars = {n: c.cell_contents for n, c in zip(_formatproduct_fn.__code__.co_freevars, _formatproduct_fn.__closure__)}
-remove_price_sections = _free_vars['remove_price_sections']
+remove_price_sections = product_formatter.remove_price_sections
 
 
 def _clean_text(text: str) -> str:
