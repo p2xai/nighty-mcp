@@ -50,6 +50,18 @@ The server supports all models available through OpenRouter. Some recommended mo
 - `meta-llama/llama-4-maverick:free`
 - `deepseek/deepseek-chat-v3-0324:free`
 
+## Running Tests
+
+Unit tests are located in the `tests/` directory and can be executed with
+[`pytest`](https://docs.pytest.org/en/stable/):
+
+```bash
+pytest
+```
+
+This will run the suite of Python tests verifying helper functions such as the
+product formatter utilities.
+
 ## License
 
 MIT License - See LICENSE file for details 
