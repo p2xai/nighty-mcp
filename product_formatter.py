@@ -5,8 +5,11 @@ from pathlib import Path
 import sys
 import asyncio
 import re
-import requests
-import discord
+try:
+    import requests
+except Exception:  # pragma: no cover - optional dependency
+    requests = None
+
 
 # Ensure this script's directory is on sys.path so sibling modules can be
 # imported even if executed from another location.
@@ -56,11 +59,13 @@ def product_formatter():
         return m.group(1).strip() if m else text.strip()
 
     def call_mcp(prompt: str, model: str = "meta-llama/llama-4-maverick:free") -> str:
+        if requests is None:
+            return "Unknown (requests library not installed)"
         try:
             resp = requests.post(
                 "http://localhost:3000/generate",
                 json={"prompt": prompt, "model": model, "language": "text"},
-                timeout=30
+                timeout=30,
             )
             resp.raise_for_status()
             return clean_block(resp.json().get("output", ""))
