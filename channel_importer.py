@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import asyncio
 from datetime import datetime
+import json
+import os
 import re
 import shlex
 
@@ -24,6 +26,7 @@ def channel_importer():
         <p>status
         <p>rolepost --channel <id> --role <role_id> --emoji 🙂 [--role id2 --emoji :grinning: ...] --text "mensaje"
         <p>delrolepost --message <msg_id> [--channel <id>]
+        <p>loadrolepost --message <msg_id> [--channel <id>]
             --source <src_id>      ID del canal origen.
             --dest <dest_id>       ID del canal destino.
             --limit <n>           Cantidad de mensajes a copiar (por defecto 50).
@@ -45,6 +48,7 @@ def channel_importer():
         <p>scheduleimport --source 123 --dest 456 --interval 24 --include-files
         <p>importmsgs stop
         <p>rolepost --channel 123 --role 789 --emoji 👍 --role 1011 --emoji 🔥 --text "Acepta las reglas"
+        <p>loadrolepost --message 123456789012345678
 
     NOTES:
     - Utiliza métodos asíncronos de Nighty para acceder al historial de mensajes.
@@ -55,7 +59,8 @@ def channel_importer():
       parejas `--role ID --emoji 😀` para ofrecer diferentes roles en un mismo mensaje.
     - Los emojis pueden escribirse directamente o usando el formato `:nombre:`
       (por ejemplo `:smile:`), que el script convertirá automáticamente.
-    - Con `delrolepost` puedes borrar un rolepost por ID para que no aparezca en `status`.
+    - Con `delrolepost` puedes borrar un rolepost por ID para que no aparezca en `status`, pero se mantiene almacenado.
+    - Los roleposts se guardan en un archivo JSON para poder restaurarlos luego con `loadrolepost`.
     """
 
     try:
@@ -69,6 +74,30 @@ def channel_importer():
     scheduled_jobs = {}
     # roleposts activos {message_id: {"channel_id": int, "pairs": [{"role_id": int, "emoji": str}]}}
     reaction_roles = {}
+    # almacenamiento persistente de roleposts {id: {channel_id, pairs, active}}
+    ROLEPOSTS_FILE = 'roleposts.json'
+    if os.path.exists(ROLEPOSTS_FILE):
+        try:
+            with open(ROLEPOSTS_FILE, 'r', encoding='utf-8') as fp:
+                rolepost_store = {int(k): v for k, v in json.load(fp).items()}
+        except Exception:
+            rolepost_store = {}
+    else:
+        rolepost_store = {}
+
+    for mid, data in rolepost_store.items():
+        if data.get('active'):
+            reaction_roles[mid] = {
+                'channel_id': data['channel_id'],
+                'pairs': data['pairs'],
+            }
+
+    def save_roleposts():
+        try:
+            with open(ROLEPOSTS_FILE, 'w', encoding='utf-8') as fp:
+                json.dump(rolepost_store, fp)
+        except Exception:
+            pass
 
     def parse_arguments(parts):
         source_id = None
@@ -404,6 +433,14 @@ def channel_importer():
                 {"role_id": rid, "emoji": str(em)} for rid, em in zip(roles, emojis)
             ],
         }
+        rolepost_store[message.id] = {
+            "channel_id": channel.id,
+            "pairs": [
+                {"role_id": rid, "emoji": str(em)} for rid, em in zip(roles, emojis)
+            ],
+            "active": True,
+        }
+        save_roleposts()
         await ctx.send("Mensaje creado.")
 
     @bot.command(
@@ -436,10 +473,21 @@ def channel_importer():
             return
 
         data = reaction_roles.pop(msg_id, None)
-        if not data:
+        if not data and msg_id not in rolepost_store:
             await ctx.send('No existe un rolepost con ese ID.')
             return
-
+        if data is None:
+            data = rolepost_store.get(msg_id)
+        if msg_id in rolepost_store:
+            rolepost_store[msg_id]['active'] = False
+        else:
+            rolepost_store[msg_id] = {
+                'channel_id': data.get('channel_id'),
+                'pairs': data.get('pairs', []),
+                'active': False,
+            }
+        save_roleposts()
+        
         # intentar borrar el mensaje
         channel = None
         if ch_val:
@@ -459,6 +507,66 @@ def channel_importer():
             except Exception:
                 pass
         await ctx.send(f"Rolepost {msg_id} eliminado.")
+
+    @bot.command(
+        name="loadrolepost",
+        description="Recarga un rolepost almacenado",
+        usage="--message <id> [--channel <chan_id>]",
+    )
+    async def loadrolepost(ctx, *, args: str):
+        await ctx.message.delete()
+        parts = shlex.split(args)
+
+        def consume(opt):
+            if opt in parts:
+                idx = parts.index(opt)
+                if idx + 1 < len(parts):
+                    val = parts[idx + 1]
+                    del parts[idx:idx + 2]
+                    return val
+            return None
+
+        msg_val = consume('--message')
+        ch_val = consume('--channel')
+        if not msg_val:
+            await ctx.send('Debes especificar --message <id>.')
+            return
+        try:
+            msg_id = int(msg_val)
+        except ValueError:
+            await ctx.send('ID de mensaje inválido.')
+            return
+
+        data = rolepost_store.get(msg_id)
+        if not data:
+            await ctx.send('No existe un rolepost almacenado con ese ID.')
+            return
+
+        channel = None
+        if ch_val:
+            try:
+                channel = bot.get_channel(int(ch_val))
+            except Exception:
+                channel = None
+        if not channel:
+            channel = bot.get_channel(data.get('channel_id'))
+        if not channel:
+            await ctx.send('Canal inválido.')
+            return
+
+        try:
+            await channel.fetch_message(msg_id)
+        except Exception:
+            await ctx.send('No se encontró el mensaje.')
+            return
+
+        reaction_roles[msg_id] = {
+            'channel_id': channel.id,
+            'pairs': data['pairs'],
+        }
+        rolepost_store[msg_id]['active'] = True
+        save_roleposts()
+        await ctx.send(f"Rolepost {msg_id} cargado.")
 
     @bot.command(
         name="stopimport",
@@ -528,6 +636,13 @@ def channel_importer():
                 lines.append(f"- mensaje {mid}: {info}")
         else:
             lines.append("No hay roleposts activos.")
+        inactive = {m: d for m, d in rolepost_store.items() if not d.get('active')}
+        if inactive:
+            lines.append("Roleposts almacenados:")
+            for mid, data in inactive.items():
+                pairs = data['pairs']
+                info = ', '.join(f"{p['emoji']}→{p['role_id']}" for p in pairs)
+                lines.append(f"- mensaje {mid}: {info}")
         await ctx.send('\n'.join(lines))
 
     @bot.event
