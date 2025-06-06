@@ -14,7 +14,8 @@ def product_formatter():
     """
     PRODUCT FORMATTER
     -----------------
-    Takes a raw product description string, strips date patterns,
+    Takes a raw product description string, strips date patterns and
+    removes trailing "Keyword..." sections,
     extracts price and shipping per country, categorizes the product title
     via the local MCP server (OpenRouter backend) and returns a nicely
     formatted Discord message with flag emojis.
@@ -99,6 +100,7 @@ def product_formatter():
             return
 
         cleaned = re.sub(r"\b\d{4}[-/]\d{2}[-/]\d{2}\b", "", args)
+        cleaned = re.sub(r"Keyword.*$", "", cleaned, flags=re.I | re.S).strip()
         price_info = parse_prices(cleaned)
         title = remove_price_sections(cleaned, price_info.keys()).strip()
         category = await run_in_thread(call_mcp, f"Categorize this product title: {title}. Only return the category.")
