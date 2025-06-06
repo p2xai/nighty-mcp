@@ -197,11 +197,15 @@ def channel_importer():
                     for att in msg.attachments:
                         try:
                             files.append(await att.to_file())
+                        except asyncio.CancelledError:
+                            raise
                         except Exception as e:
                             print(f"Error leyendo adjunto: {e}", type_="ERROR")
                 msgs.append((text, files))
                 if latest_time is None or msg.created_at > latest_time:
                     latest_time = msg.created_at
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             if ctx:
                 await ctx.send(f"Error obteniendo mensajes: {e}")
@@ -216,6 +220,8 @@ def channel_importer():
                         await dst_channel.send(content or "", files=files)
                     else:
                         await dst_channel.send(content)
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
                     print(f"Error enviando mensaje: {e}", type_="ERROR")
                     await asyncio.sleep(1)
@@ -388,6 +394,8 @@ def channel_importer():
             try:
                 await message.add_reaction(emoji_val)
                 await asyncio.sleep(0.3)
+            except asyncio.CancelledError:
+                raise
             except Exception:
                 await ctx.send("No pude añadir la reacción.")
         reaction_roles[message.id] = {
@@ -446,6 +454,8 @@ def channel_importer():
             try:
                 msg = await channel.fetch_message(msg_id)
                 await msg.delete()
+            except asyncio.CancelledError:
+                raise
             except Exception:
                 pass
         await ctx.send(f"Rolepost {msg_id} eliminado.")
@@ -502,7 +512,12 @@ def channel_importer():
         if scheduled_jobs:
             lines.append("Importaciones programadas:")
             for (src, dst), data in scheduled_jobs.items():
-                lines.append(f"- {src} -> {dst}")
+                lt = data.get('last_time')
+                if isinstance(lt, datetime):
+                    ts = lt.strftime('%Y-%m-%d %H:%M')
+                    lines.append(f"- {src} -> {dst} (última: {ts})")
+                else:
+                    lines.append(f"- {src} -> {dst}")
         else:
             lines.append("No hay importaciones programadas.")
         if reaction_roles:
