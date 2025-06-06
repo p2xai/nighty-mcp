@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import product_formatter
 
 # Ensure this script's directory is on sys.path so sibling modules load
 # correctly when executed from elsewhere.
