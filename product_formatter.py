@@ -63,19 +63,42 @@ def product_formatter():
     }
 
     def parse_prices(text: str):
+        """Extract price + shipping info per country from the raw text."""
         data = {}
+
+        # first split by common separators like newlines, commas or semicolons
         for part in re.split(r"[\n,;]+", text):
             part = part.strip()
             if not part:
                 continue
-            m = re.match(r"([A-Za-z]{2,3})[^$€£\d]*([$€£]?\d+(?:\.\d+)?)", part)
-            if m:
-                code = m.group(1).upper()
-                price = m.group(2)
-                ship_m = re.search(r"shipping\s*([$€£]?\d+(?:\.\d+)?)", part, re.I)
+
+            # each part may contain multiple country/price pairs separated by '/'
+            for sub in part.split('/'):
+                sub = sub.strip()
+                if not sub:
+                    continue
+
+                # format 1: "USA $99" (optionally with "shipping $X")
+                m1 = re.match(r"([A-Za-z]{2,3})[^$€£\d]*([$€£]?\d+(?:\.\d+)?)", sub)
+                if m1:
+                    code = m1.group(1).upper()
+                    price = m1.group(2)
+                else:
+                    # format 2: "$99 to USA"
+                    m2 = re.match(r"([$€£]?\d+(?:\.\d+)?)\s*to\s*([A-Za-z]{2,3})", sub, re.I)
+                    if not m2:
+                        continue
+                    price = m2.group(1)
+                    code = m2.group(2).upper()
+
+                ship_m = re.search(r"shipping\s*([$€£]?\d+(?:\.\d+)?)", sub, re.I)
                 ship = ship_m.group(1) if ship_m else "N/A"
                 data[code] = {"price": price, "shipping": ship}
+
         return data
+
+    # expose for testing
+    globals()["parse_prices"] = parse_prices
 
     def remove_price_sections(text: str, codes):
         parts = []
