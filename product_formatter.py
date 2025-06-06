@@ -1,0 +1,113 @@
+# -*- coding: utf-8 -*-
+import asyncio
+import re
+import requests
+import discord
+
+@nightyScript(
+    name="Product Formatter",
+    author="thedorekaczynski",
+    description="Format product info and categorize with OpenRouter",
+    usage="<p>formatproduct <raw description>"
+)
+def product_formatter():
+    """
+    PRODUCT FORMATTER
+    -----------------
+    Takes a raw product description string, strips date patterns,
+    extracts price and shipping per country, categorizes the product title
+    via the local MCP server (OpenRouter backend) and returns a nicely
+    formatted Discord message with flag emojis.
+
+    COMMANDS:
+        <p>formatproduct <raw description>
+
+    EXAMPLES:
+        <p>formatproduct USA $99 shipping $10, UK £80 shipping £5 - Super Widget 2024-06-30
+    """
+
+    async def run_in_thread(func, *args, **kwargs):
+        """Run sync function in thread."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
+    def clean_block(text: str) -> str:
+        m = re.search(r"```(?:text)?\n(.*?)```", text, re.DOTALL)
+        return m.group(1).strip() if m else text.strip()
+
+    def call_mcp(prompt: str, model: str = "meta-llama/llama-4-maverick:free") -> str:
+        try:
+            resp = requests.post(
+                "http://localhost:3000/generate",
+                json={"prompt": prompt, "model": model, "language": "text"},
+                timeout=30
+            )
+            resp.raise_for_status()
+            return clean_block(resp.json().get("output", ""))
+        except Exception as e:
+            return f"Unknown ({e})"
+
+    FLAG_MAP = {
+        "USA": "\U0001F1FA\U0001F1F8",
+        "US": "\U0001F1FA\U0001F1F8",
+        "UK": "\U0001F1EC\U0001F1E7",
+        "GB": "\U0001F1EC\U0001F1E7",
+        "DE": "\U0001F1E9\U0001F1EA",
+        "AU": "\U0001F1E6\U0001F1FA",
+        "CA": "\U0001F1E8\U0001F1E6",
+        "FR": "\U0001F1EB\U0001F1F7",
+        "IT": "\U0001F1EE\U0001F1F9",
+        "ES": "\U0001F1EA\U0001F1F8",
+        "JP": "\U0001F1EF\U0001F1F5"
+    }
+
+    def parse_prices(text: str):
+        data = {}
+        for part in re.split(r"[\n,;]+", text):
+            part = part.strip()
+            if not part:
+                continue
+            m = re.match(r"([A-Za-z]{2,3})[^$€£\d]*([$€£]?\d+(?:\.\d+)?)", part)
+            if m:
+                code = m.group(1).upper()
+                price = m.group(2)
+                ship_m = re.search(r"shipping\s*([$€£]?\d+(?:\.\d+)?)", part, re.I)
+                ship = ship_m.group(1) if ship_m else "N/A"
+                data[code] = {"price": price, "shipping": ship}
+        return data
+
+    def remove_price_sections(text: str, codes):
+        parts = []
+        for piece in re.split(r"[\n,;]+", text):
+            p = piece.strip()
+            if not p:
+                continue
+            if any(p.startswith(c) for c in codes):
+                continue
+            parts.append(p)
+        return " ".join(parts)
+
+    @bot.command(
+        name="formatproduct",
+        description="Format a raw product description",
+        usage="<raw description>"
+    )
+    async def formatproduct(ctx, *, args: str):
+        await ctx.message.delete()
+        if not args.strip():
+            await ctx.send("Provide a description.")
+            return
+
+        cleaned = re.sub(r"\b\d{4}[-/]\d{2}[-/]\d{2}\b", "", args)
+        price_info = parse_prices(cleaned)
+        title = remove_price_sections(cleaned, price_info.keys()).strip()
+        category = await run_in_thread(call_mcp, f"Categorize this product title: {title}. Only return the category.")
+
+        lines = [f"**{title}**", f"_Category: {category}_", ""]
+        for code, vals in price_info.items():
+            flag = FLAG_MAP.get(code, code)
+            shipping = f" + {vals['shipping']} shipping" if vals['shipping'] != "N/A" else ""
+            lines.append(f"{flag} {vals['price']}{shipping}")
+        await ctx.send("\n".join(lines))
+
+product_formatter()
