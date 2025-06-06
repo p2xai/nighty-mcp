@@ -25,6 +25,15 @@ def product_formatter():
 
     EXAMPLES:
         <p>formatproduct USA $99 shipping $10, UK £80 shipping £5 - Super Widget 2024-06-30
+        <p>formatproduct USA $99 shipping $10, UK £80 shipping £5 - Super Widget 2024-06-30 Keyword: gadget sale
+            **Super Widget**
+            _Category: Example_
+            \U0001F1FA\U0001F1F8 $99 + $10 shipping
+            \U0001F1EC\U0001F1E7 £80 + £5 shipping
+
+    NOTES:
+    - Dates in the form YYYY-MM-DD or YYYY/MM/DD are removed from the input.
+    - Any trailing text beginning with "Keyword" (case-insensitive) is stripped.
     """
 
     async def run_in_thread(func, *args, **kwargs):
