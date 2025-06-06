@@ -61,6 +61,7 @@ def channel_importer():
       (por ejemplo `:smile:`), que el script convertirá automáticamente.
     - Con `delrolepost` puedes borrar un rolepost por ID para que no aparezca en `status`, pero se mantiene almacenado.
     - Los roleposts se guardan en un archivo JSON para poder restaurarlos luego con `loadrolepost`.
+    - Las fechas de última importación se guardan en `import_history.json` para reanudar desde el último mensaje tras reiniciar el bot.
     """
 
     try:
@@ -72,6 +73,22 @@ def channel_importer():
     # almacenamiento de importaciones programadas
     # { (src_id, dest_id): {"task": asyncio.Task, "last_time": datetime|None} }
     scheduled_jobs = {}
+    IMPORT_HISTORY_FILE = 'import_history.json'
+    if os.path.exists(IMPORT_HISTORY_FILE):
+        try:
+            with open(IMPORT_HISTORY_FILE, 'r', encoding='utf-8') as fp:
+                raw = json.load(fp)
+            import_history = {}
+            for k, v in raw.items():
+                try:
+                    s, d = k.split('>')
+                    import_history[(int(s), int(d))] = datetime.fromisoformat(v)
+                except Exception:
+                    pass
+        except Exception:
+            import_history = {}
+    else:
+        import_history = {}
     # roleposts activos {message_id: {"channel_id": int, "pairs": [{"role_id": int, "emoji": str}]}}
     reaction_roles = {}
     # almacenamiento persistente de roleposts {id: {channel_id, pairs, active}}
@@ -96,6 +113,14 @@ def channel_importer():
         try:
             with open(ROLEPOSTS_FILE, 'w', encoding='utf-8') as fp:
                 json.dump(rolepost_store, fp)
+        except Exception:
+            pass
+
+    def save_import_history():
+        try:
+            with open(IMPORT_HISTORY_FILE, 'w', encoding='utf-8') as fp:
+                data = {f"{k[0]}>{k[1]}": v.isoformat() for k, v in import_history.items()}
+                json.dump(data, fp)
         except Exception:
             pass
 
@@ -255,6 +280,9 @@ def channel_importer():
                     print(f"Error enviando mensaje: {e}", type_="ERROR")
                     await asyncio.sleep(1)
 
+        if latest_time:
+            import_history[(opts['source_id'], opts['dest_id'])] = latest_time
+            save_import_history()
         return latest_time
 
 
@@ -359,6 +387,10 @@ def channel_importer():
         if key in scheduled_jobs:
             scheduled_jobs[key]['task'].cancel()
         job_opts = opts.copy()
+        if not job_opts.get('after_date'):
+            stored = import_history.get(key)
+            if stored:
+                job_opts['after_date'] = stored
 
         async def loop_job():
             while True:
@@ -369,7 +401,10 @@ def channel_importer():
                 await asyncio.sleep(interval * 3600)
 
         task = asyncio.create_task(loop_job())
-        scheduled_jobs[key] = {"task": task, "last_time": job_opts.get('after_date')}
+        scheduled_jobs[key] = {
+            "task": task,
+            "last_time": job_opts.get('after_date')
+        }
         await ctx.send(
             f"Importación programada cada {interval}h para {key[0]} -> {key[1]}."
         )
@@ -628,6 +663,14 @@ def channel_importer():
                     lines.append(f"- {src} -> {dst}")
         else:
             lines.append("No hay importaciones programadas.")
+        if import_history:
+            lines.append("Historial de importaciones:")
+            for (src, dst), ts in import_history.items():
+                if isinstance(ts, datetime):
+                    ts_str = ts.strftime('%Y-%m-%d %H:%M')
+                else:
+                    ts_str = str(ts)
+                lines.append(f"- {src} -> {dst}: {ts_str}")
         if reaction_roles:
             lines.append("Roleposts activos:")
             for mid, data in reaction_roles.items():
