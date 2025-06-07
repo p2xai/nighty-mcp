@@ -3,6 +3,7 @@ import requests               # synchronous HTTP client
 import asyncio
 import discord
 import re
+from logging_helper import log
 
 
 @nightyScript(
@@ -106,7 +107,7 @@ def generate_code_script():
         output = await run_in_thread(post_to_mcp, prompt_full, model, language)
         
         # Log output details
-        print(f"Output length: {len(output)} characters", type_="INFO")
+        log(f"Output length: {len(output)} characters", type_="INFO")
 
         # Discord has a 2000 character limit per message
         # We'll use 1900 to be safe and account for the code block markers
@@ -116,7 +117,7 @@ def generate_code_script():
             # For longer outputs, save as a file
             temp = Path(getScriptsPath()) / "generated.py"
             temp.write_text(output, encoding="utf-8")
-            print(f"Saved output to {temp} ({len(output)} characters)", type_="INFO")
+            log(f"Saved output to {temp} ({len(output)} characters)", type_="INFO")
             await ctx.send(file=discord.File(str(temp)))
             # Clean up the temporary file
             temp.unlink()
