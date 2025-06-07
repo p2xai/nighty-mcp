@@ -250,6 +250,7 @@ def channel_importer():
         }, error
 
     async def do_import(opts, ctx=None):
+        import builtins
         src_channel = bot.get_channel(opts['source_id'])
         dst_channel = bot.get_channel(opts['dest_id'])
         if not src_channel or not dst_channel:
