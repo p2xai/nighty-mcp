@@ -47,9 +47,16 @@ querying the local MCP server.
 
 ## Logging Helper
 
-Nighty may patch Python's ``print`` to accept a ``type_`` parameter for
-log levels. The helper scripts therefore use a ``log(msg, type_)`` wrapper
-which calls ``print`` normally when that parameter is unsupported.
+Nighty may patch Python's ``print`` function to accept a ``type_`` keyword
+for log levels. The ``logging_helper.log`` utility checks for this support
+and falls back to a regular ``print`` call when the keyword is not
+available.
+
+```python
+from logging_helper import log
+
+log("Script initialization complete", type_="INFO")
+```
 
 ## Usage
 
