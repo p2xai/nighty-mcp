@@ -113,7 +113,7 @@ def product_formatter():
                     continue
 
                 # format 1: "USA $99" (optionally with "shipping $X")
-                m1 = re.match(r"^([A-Za-z]{2,3})\b[^$€£\d]*([$€£]?\d+(?:\.\d+)?)", sub)
+                m1 = re.match(r"^\b([A-Za-z]{2,3})\b[^$€£\d]*([$€£]?\d+(?:\.\d+)?)", sub)
                 if m1:
                     code = m1.group(1).upper()
                     price = m1.group(2)
