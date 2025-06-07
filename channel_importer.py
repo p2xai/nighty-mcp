@@ -310,7 +310,7 @@ def channel_importer():
             if ctx:
                 await ctx.send(f"Error obteniendo mensajes: {e}")
             else:
-                print(f"Error obteniendo mensajes: {e}")
+                log(f"Error obteniendo mensajes: {e}", type_="ERROR")
             return None
 
         for content, files in msgs:
