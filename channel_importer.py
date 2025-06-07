@@ -16,9 +16,11 @@ _MODULE_DIR = Path(__file__).resolve().parent
 if str(_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_MODULE_DIR))
 
+product_formatter = None
 try:
-    import product_formatter
-except ImportError:  # pragma: no cover - safe fallback if missing
+    import product_formatter as _pf
+    product_formatter = _pf
+except Exception:  # pragma: no cover - safe fallback if anything goes wrong
     product_formatter = None
 
 @nightyScript(
