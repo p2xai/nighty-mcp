@@ -40,6 +40,12 @@ pip install requests
 If `requests` is not available, product formatting will fall back to a basic
 "Unknown" result when querying the local MCP server.
 
+## Logging Helper
+
+Nighty may patch Python's ``print`` to accept a ``type_`` parameter for
+log levels. The helper scripts therefore use a ``log(msg, type_)`` wrapper
+which calls ``print`` normally when that parameter is unsupported.
+
 ## Usage
 
 The server runs on `http://localhost:3000` by default. It accepts POST requests to `/generate` with the following JSON body:
