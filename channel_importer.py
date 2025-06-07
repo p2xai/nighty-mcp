@@ -9,7 +9,6 @@ import json
 import os
 import re
 import shlex
-from logging_helper import log
 
 # Ensure this script's directory is on sys.path so sibling modules load
 # correctly when executed from elsewhere.
@@ -22,7 +21,7 @@ try:
     import product_formatter as _pf
     product_formatter = _pf
 except Exception:  # pragma: no cover - safe fallback if anything goes wrong
-    product_formatter = None
+    product_formatter = False
 
 @nightyScript(
     name="Channel Importer",
@@ -78,7 +77,7 @@ def channel_importer():
     - Con --mention-role se notificará a los roles indicados en cada copia.
     - El comando `rolepost` crea un mensaje de reacción que asigna roles. Puedes indicar varias
       parejas `--role ID --emoji 😀` para ofrecer diferentes roles en un mismo mensaje.
-    - Los emojis pueden escribirse directamente o usando el formato `:nombre:`
+    - Los emojis pueden escribirse directamente o usando el formato `:nombre:` 
       (por ejemplo `:smile:`), que el script convertirá automáticamente.
     - Con `delrolepost` puedes borrar un rolepost por ID para que no aparezca en `status`, pero se mantiene almacenado.
     - Los roleposts se guardan en un archivo JSON para poder restaurarlos luego con `loadrolepost`.
@@ -110,6 +109,7 @@ def channel_importer():
             import_history = {}
     else:
         import_history = {}
+
     # roleposts activos {message_id: {"channel_id": int, "pairs": [{"role_id": int, "emoji": str}]}}
     reaction_roles = {}
     # almacenamiento persistente de roleposts {id: {channel_id, pairs, active}}
@@ -266,8 +266,17 @@ def channel_importer():
                 for old, new in opts['replacements'].items():
                     text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
                 pf = globals().get('product_formatter')
-                if opts.get('format_product') and pf:
-                    text = await pf.format_description(text)
+                if opts.get('format_product'):
+                    if pf is None:
+                        try:
+                            import importlib
+                            pf = importlib.import_module('product_formatter')
+                            globals()['product_formatter'] = pf
+                        except Exception:
+                            pf = False
+                            globals()['product_formatter'] = False
+                    if pf and hasattr(pf, 'format_description'):
+                        text = await pf.format_description(text)
                 trend_line = f"Tendencia [{get_message_date(msg)}]"
                 if opts['signature']:
                     text = f"{text}\n{opts['signature']}" if text else opts['signature']
@@ -283,7 +292,7 @@ def channel_importer():
                         except asyncio.CancelledError:
                             raise
                         except Exception as e:
-                            log(f"Error leyendo adjunto: {e}", type_="ERROR")
+                            print(f"Error leyendo adjunto: {e}", type_="ERROR")
                 msgs.append((text, files))
                 if latest_time is None or msg.created_at > latest_time:
                     latest_time = msg.created_at
@@ -306,13 +315,14 @@ def channel_importer():
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    log(f"Error enviando mensaje: {e}", type_="ERROR")
+                    print(f"Error enviando mensaje: {e}", type_="ERROR")
                     await asyncio.sleep(1)
 
         if latest_time:
             import_history[(opts['source_id'], opts['dest_id'])] = latest_time
             save_import_history()
         return latest_time
+
 
 
 
