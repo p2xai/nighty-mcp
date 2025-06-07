@@ -32,7 +32,9 @@ remove_price_sections = product_formatter.remove_price_sections
 
 def _clean_text(text: str) -> str:
     text = re.sub(r"\b\d{4}[-/]\d{2}[-/]\d{2}\b", "", text)
-    return re.sub(r"Keyword.*$", "", text, flags=re.I | re.S).strip()
+    text = re.sub(r"Keyword.*$", "", text, flags=re.I | re.S).strip()
+    text = text.replace("Goshippro", "Hause")
+    return re.sub(r"^.*keyword on.*$", "", text, flags=re.I | re.M)
 
 
 def test_country_leading_format():

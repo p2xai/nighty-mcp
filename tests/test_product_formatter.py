@@ -146,3 +146,16 @@ def test_format_description_includes_extra_details():
     assert lines[5] == "Delivery: To USA: 6-15 days/To EU: 6-9 days"
     assert lines[6] == "Gross Weight: 0.2kg"
     assert lines[7] == "Units Sold: 300"
+
+
+def test_format_description_cleans_keyword_line_and_brand():
+    product_formatter.call_mcp = lambda *a, **k: "Test"
+    text = (
+        "USA $10\n"
+        "Buy from Goshippro\n"
+        "Keyword on sale"
+    )
+    result = asyncio.run(format_description(text))
+    assert "Goshippro" not in result
+    assert "Hause" in result
+    assert re.search(r"keyword on", result, re.I) is None
