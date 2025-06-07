@@ -43,7 +43,7 @@ require Python 3 with several libraries installed. Install them using:
 pip install -r requirements.txt
 ```
 
-This file includes `requests`, `discord.py` and `emoji`. If `requests` is not
+This file includes `requests` and `emoji`. If `requests` is not
 available, product formatting will fall back to a basic "Unknown" result when
 querying the local MCP server.
 
