@@ -53,6 +53,10 @@ channels = {1: FakeChannel([FakeMessage("Test product")]), 2: FakeChannel()}
 
 builtins.bot = FakeBot(channels)
 
+# ensure isolation across tests
+if hasattr(builtins, 'product_formatter'):
+    delattr(builtins, 'product_formatter')
+
 # ensure repo root on path
 repo = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(repo))

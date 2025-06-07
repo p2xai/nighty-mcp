@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import builtins
 
 # Ensure this script's directory is on sys.path so sibling modules load
 # correctly when executed from elsewhere.
@@ -16,10 +17,15 @@ _MODULE_DIR = Path(__file__).resolve().parent
 if str(_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_MODULE_DIR))
 
-try:
-    import product_formatter
-except ImportError:  # pragma: no cover - safe fallback if missing
-    product_formatter = None
+# store formatter module in builtins so nested callbacks always find it
+product_formatter = getattr(builtins, 'product_formatter', None)
+if product_formatter is None:
+    try:
+        import product_formatter as _pf
+        product_formatter = _pf
+    except Exception:  # pragma: no cover - safe fallback if anything goes wrong
+        product_formatter = False
+    builtins.product_formatter = product_formatter
 
 @nightyScript(
     name="Channel Importer",
@@ -262,8 +268,18 @@ def channel_importer():
                 text = remove_lines_with_words(text, opts['omit_words'])
                 for old, new in opts['replacements'].items():
                     text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
-                if opts.get('format_product') and product_formatter:
-                    text = await product_formatter.format_description(text)
+                pf = getattr(builtins, 'product_formatter', None)
+                if opts.get('format_product'):
+                    if pf is None:
+                        try:
+                            import importlib
+                            pf = importlib.import_module('product_formatter')
+                            builtins.product_formatter = pf
+                        except Exception:
+                            pf = False
+                            builtins.product_formatter = False
+                    if pf and hasattr(pf, 'format_description'):
+                        text = await pf.format_description(text)
                 trend_line = f"Tendencia [{get_message_date(msg)}]"
                 if opts['signature']:
                     text = f"{text}\n{opts['signature']}" if text else opts['signature']
