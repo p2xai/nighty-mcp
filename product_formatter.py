@@ -153,6 +153,8 @@ def product_formatter():
 
         cleaned = re.sub(r"\b\d{4}[-/]\d{2}[-/]\d{2}\b", "", text)
         cleaned = re.sub(r"Keyword.*$", "", cleaned, flags=re.I | re.S).strip()
+        cleaned = cleaned.replace("Goshippro", "Hause")
+        cleaned = re.sub(r"^.*keyword on.*$", "", cleaned, flags=re.I | re.M)
         price_info = parse_prices(cleaned)
         title = remove_price_sections(cleaned, price_info.keys()).strip()
         category = await run_in_thread(
