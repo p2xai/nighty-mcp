@@ -52,6 +52,9 @@ for log levels. The ``logging_helper.log`` utility checks for this support
 and falls back to a regular ``print`` call when the keyword is not
 available.
 
+Use this helper instead of calling ``print(..., type_=...)`` directly so your
+scripts work whether or not Nighty has patched ``print``.
+
 ```python
 from logging_helper import log
 
