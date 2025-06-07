@@ -10,6 +10,7 @@ import os
 import re
 import shlex
 import builtins
+from logging_helper import log
 
 # Ensure this script's directory is on sys.path so sibling modules load
 # correctly when executed from elsewhere.
@@ -296,7 +297,7 @@ def channel_importer():
                         except asyncio.CancelledError:
                             raise
                         except Exception as e:
-                            print(f"Error leyendo adjunto: {e}", type_="ERROR")
+                            log(f"Error leyendo adjunto: {e}", type_="ERROR")
                 msgs.append((text, files))
                 if latest_time is None or msg.created_at > latest_time:
                     latest_time = msg.created_at
@@ -306,7 +307,7 @@ def channel_importer():
             if ctx:
                 await ctx.send(f"Error obteniendo mensajes: {e}")
             else:
-                print(f"Error obteniendo mensajes: {e}")
+                log(f"Error obteniendo mensajes: {e}", type_="ERROR")
             return None
 
         for content, files in msgs:
@@ -319,7 +320,7 @@ def channel_importer():
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    print(f"Error enviando mensaje: {e}", type_="ERROR")
+                    log(f"Error enviando mensaje: {e}", type_="ERROR")
                     await asyncio.sleep(1)
 
         if latest_time:

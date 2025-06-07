@@ -28,4 +28,6 @@ coverage
 .vscode/
 *.swp
 *.swo
-.DS_Store .env 
+.DS_Store .env
+__pycache__/
+*.pyc

@@ -31,10 +31,10 @@ A local server that uses OpenRouter's API to generate code for Nighty scripts. T
 ## Python Dependencies
 
 The helper scripts such as `channel_importer.py` and `product_formatter.py`
-require Python 3 with the `requests` library installed. Install it with:
+require Python 3 with the libraries listed in `requirements.txt`. Install them with:
 
 ```bash
-pip install requests
+pip install -r requirements.txt
 ```
 
 If `requests` is not available, product formatting will fall back to a basic
