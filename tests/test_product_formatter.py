@@ -20,6 +20,9 @@ import product_formatter
 parse_prices = product_formatter.parse_prices
 parse_profits = product_formatter.parse_profits
 parse_margins = product_formatter.parse_margins
+parse_delivery_times = product_formatter.parse_delivery_times
+parse_weight = product_formatter.parse_weight
+parse_units_sold = product_formatter.parse_units_sold
 format_description = product_formatter.format_description
 
 
@@ -100,3 +103,33 @@ def test_format_description_includes_profit_margin():
     lines = result.splitlines()
     assert lines[3] == "\U0001F1FA\U0001F1F8 $99 + $10 shipping (Profit: $11, Margin: 5%)"
     assert lines[4] == "\U0001F1EC\U0001F1E7 £80 + £5 shipping (Profit: $12, Margin: 6%)"
+
+
+def test_parse_delivery_weight_units():
+    text = (
+        "USA $10\n"
+        "To USA: 6-15 days/To EU: 6-9 days\n"
+        "Gross Weight: 0.2kg\n"
+        "Units Sold: 500"
+    )
+    assert parse_delivery_times(text) == {"USA": "6-15 days", "EU": "6-9 days"}
+    assert parse_weight(text) == "0.2kg"
+    assert parse_units_sold(text) == "500"
+
+
+def test_format_description_includes_extra_details():
+    product_formatter.call_mcp = lambda *a, **k: "Test"
+    text = (
+        "USA $99 shipping $10, UK £80 shipping £5\n"
+        "To USA: 6-15 days/To EU: 6-9 days\n"
+        "Gross Weight: 0.2kg\n"
+        "Units Sold: 300\n"
+        "Amazing Item"
+    )
+    result = asyncio.run(format_description(text))
+    lines = result.splitlines()
+    assert lines[3] == "\U0001F1FA\U0001F1F8 $99 + $10 shipping"
+    assert lines[4] == "\U0001F1EC\U0001F1E7 £80 + £5 shipping"
+    assert lines[5] == "Delivery: To USA: 6-15 days/To EU: 6-9 days"
+    assert lines[6] == "Gross Weight: 0.2kg"
+    assert lines[7] == "Units Sold: 300"

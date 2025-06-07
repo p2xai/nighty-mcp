@@ -109,6 +109,8 @@ def product_formatter():
                 sub = sub.strip()
                 if not sub:
                     continue
+                if re.search(r"\bdays?\b", sub, re.I):
+                    continue
 
                 # format 1: "USA $99" (optionally with "shipping $X")
                 m1 = re.match(r"^([A-Za-z]{2,3})\b[^$€£\d]*([$€£]?\d+(?:\.\d+)?)", sub)
@@ -160,6 +162,27 @@ def product_formatter():
 
     globals()["parse_margins"] = parse_margins
 
+    def parse_delivery_times(text: str):
+        """Return delivery time per country."""
+        pairs = re.findall(r"To\s*([A-Za-z]{2,3})\s*:\s*([\d-]+\s*days)", text, re.I)
+        return {c.upper(): t.strip() for c, t in pairs}
+
+    globals()["parse_delivery_times"] = parse_delivery_times
+
+    def parse_weight(text: str):
+        """Extract gross weight value if present."""
+        m = re.search(r"Gross Weight:\s*([^\n]+)", text, re.I)
+        return m.group(1).strip() if m else ""
+
+    globals()["parse_weight"] = parse_weight
+
+    def parse_units_sold(text: str):
+        """Extract units sold value if present."""
+        m = re.search(r"Units Sold:?\s*([\d,]+)", text, re.I)
+        return m.group(1).strip() if m else ""
+
+    globals()["parse_units_sold"] = parse_units_sold
+
     def remove_price_sections(text: str, codes):
         parts = []
         for piece in re.split(r"[\n,;]+", text):
@@ -186,7 +209,14 @@ def product_formatter():
         price_info = parse_prices(cleaned)
         profits = parse_profits(cleaned, list(price_info.keys()))
         margins = parse_margins(cleaned, list(price_info.keys()))
-        title = remove_price_sections(cleaned, price_info.keys()).strip()
+        delivery = parse_delivery_times(cleaned)
+        weight = parse_weight(cleaned)
+        sold = parse_units_sold(cleaned)
+
+        title_source = re.sub(r"To\s*[A-Za-z]{2,3}[^\n]*days(?:\s*/\s*To\s*[A-Za-z]{2,3}[^\n]*days)*", "", cleaned, flags=re.I)
+        title_source = re.sub(r"Gross Weight:[^\n]+", "", title_source, flags=re.I)
+        title_source = re.sub(r"Units Sold:?[^\n]+", "", title_source, flags=re.I)
+        title = remove_price_sections(title_source, price_info.keys()).strip()
         category = await run_in_thread(
             call_mcp,
             f"Categorize this product title: {title}. Only return the category."
@@ -205,6 +235,14 @@ def product_formatter():
                 extra_parts.append(f"Margin: {margins[code]}")
             extra = f" ({', '.join(extra_parts)})" if extra_parts else ""
             lines.append(f"{flag} {vals['price']}{shipping}{extra}")
+
+        if delivery:
+            parts = [f"To {c}: {t}" for c, t in delivery.items()]
+            lines.append("Delivery: " + "/".join(parts))
+        if weight:
+            lines.append(f"Gross Weight: {weight}")
+        if sold:
+            lines.append(f"Units Sold: {sold}")
         return "\n".join(lines)
 
     # expose for external use
