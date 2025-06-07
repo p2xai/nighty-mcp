@@ -6,6 +6,15 @@
 
 ---
 
+## Table of Contents
+
+- [1. Overview](#1-overview)
+- [2. Script Structure](#2-script-structure)
+- [3. Command Prefix](#3-command-prefix)
+- [4. Core Functions](#4-core-functions)
+- [5. Asynchronous Operations](#5-asynchronous-operations)
+- [6. Common Script Patterns](#6-common-script-patterns)
+
 ## 1. Overview
 
 NightyScript extends Nighty (a Discord selfbot) with custom Python scripts. Scripts define commands and event handlers. Nighty manages the Discord connection; scripts focus purely on functionality. It is built on a modified version of the discord.py-self library.
@@ -29,7 +38,7 @@ import matplotlib  # or any matplotlib-related imports
 
 You may use objects like `discord.File` without importing them — NightyScript makes them available via its built-in API.
 
-### 1.2 Guidelines 
+### 1.2 Guidelines
 
 * Only use standard Python imports and NightyScript-provided functions.
 * External Python packages (e.g. `pydub`, `numpy`, `matplotlib`) are not allowed, unless they are non-Python tools like Docker.
@@ -75,7 +84,7 @@ script_function()  # IMPORTANT: Call to initialize
 
 **description**: Brief explanation (string).
 
-**usage**: Command syntax. `<p>` is the user's configured prefix. `[]` denotes optional arguments, `--` indicates flags (string).
+**usage**: Command syntax. `<p>` is the user's configured prefix. `[]` denotes optional arguments, `-` indicates flags (string).
 
 The decorated function (`script_function`) is the script's entry point. It's called on script load.
 
@@ -102,7 +111,7 @@ def script_function():
 
     EXAMPLES:
     <p>command1 arg1 arg2 - Example usage of command1
-    <p>command2 --flag     - Example usage of command2 with flags
+    <p>command2 -flag     - Example usage of command2 with flags
 
     NOTES:
     - Important note about functionality
@@ -224,7 +233,7 @@ Define commands using the `@bot.command` decorator:
 @bot.command(
     name="command",
     aliases=["c", "cmd"], # Optional list of aliases
-    usage="<arg1> [--flag]",
+    usage="<arg1> [-flag]",
     description="Desc"
 )
 async def command_handler(ctx, *, args: str):
@@ -233,7 +242,7 @@ async def command_handler(ctx, *, args: str):
     # Argument parsing example:
     parts = args.split()
     arg1 = parts[0] if parts else ""
-    flag_present = "--flag" in parts
+    flag_present = "-flag" in parts
 
     if flag_present:
         # ... process flag ...
@@ -275,7 +284,7 @@ For scripts with multiple related commands, consider consolidating them under a 
 ```python
 @bot.command(
     name="maincommand",
-    usage="<subcommand> [args] OR <default_action_arg> [--flags]",
+    usage="<subcommand> [args] OR <default_action_arg> [-flags]",
     description="Main command with subcommands for various actions."
 )
 async def main_command(ctx, *, args: str):
@@ -564,7 +573,7 @@ NightyScript provides several ways to send messages:
 
 #### 4.6.3 Disabling Private Mode for Embeds
 
-Nighty's "private mode" can block outgoing messages like embeds — especially when the script pulls from external sources.  
+Nighty's "private mode" can block outgoing messages like embeds — especially when the script pulls from external sources.
 To ensure your embed sends successfully, **temporarily disable private mode** during the send.
 
 ```python
@@ -616,7 +625,23 @@ else:
     await ctx.send(f"<:emoji:{EMOJI_ID}>")
 ```
 
-`get_emoji` returns `None` when the emoji isn’t cached or accessible. If the bot lacks access to the emoji, the raw string will not render properly.
+`get_emoji` returns `None` when the emoji isn’t cached or accessible. If the bot lacks access
+to the emoji, the raw string will not render properly.
+
+#### 4.6.6 Silent Messages
+
+Use the `silent=True` parameter with `ctx.send` for quick follow‑up or status
+updates that do not need to ping or notify other users. This is especially
+helpful in direct messages where every notification creates a ping. A "nothing
+burger" confirmation (e.g., "Note added.") can be sent silently so it appears in
+the chat history without generating a new notification.
+
+```python
+msg = await ctx.send("Processing...", silent=True)  # no ping for temporary status
+# ...do work...
+await msg.delete()
+```
+
 
 
 ### 4.7 Webhook Integration
