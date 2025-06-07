@@ -1,3 +1,4 @@
+# Python dependencies for helper scripts
 requests
 discord.py
 emoji
