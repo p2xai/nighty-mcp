@@ -132,6 +132,34 @@ def product_formatter():
     # expose for testing
     globals()["parse_prices"] = parse_prices
 
+    def _parse_slash_values(line: str):
+        vals = [v.strip() for v in line.split('/')]
+        return [v for v in vals if v]
+
+    def parse_profits(text: str, countries):
+        """Return profit per unit mapped to given countries."""
+        m = re.search(r"profit[^:]*:([^\n]+)", text, re.I)
+        if not m:
+            return {}
+        values = re.findall(r"[$€£]?\d+(?:\.\d+)?", m.group(1))
+        if not values:
+            values = _parse_slash_values(m.group(1))
+        return {c: v for c, v in zip(countries, values)}
+
+    globals()["parse_profits"] = parse_profits
+
+    def parse_margins(text: str, countries):
+        """Return margin values mapped to countries."""
+        m = re.search(r"margin[^:]*:([^\n]+)", text, re.I)
+        if not m:
+            return {}
+        values = re.findall(r"\d+(?:\.\d+)?%", m.group(1))
+        if not values:
+            values = _parse_slash_values(m.group(1))
+        return {c: v for c, v in zip(countries, values)}
+
+    globals()["parse_margins"] = parse_margins
+
     def remove_price_sections(text: str, codes):
         parts = []
         for piece in re.split(r"[\n,;]+", text):
@@ -156,6 +184,8 @@ def product_formatter():
         cleaned = cleaned.replace("Goshippro", "Hause")
         cleaned = re.sub(r"^.*keyword on.*$", "", cleaned, flags=re.I | re.M)
         price_info = parse_prices(cleaned)
+        profits = parse_profits(cleaned, list(price_info.keys()))
+        margins = parse_margins(cleaned, list(price_info.keys()))
         title = remove_price_sections(cleaned, price_info.keys()).strip()
         category = await run_in_thread(
             call_mcp,
@@ -168,7 +198,13 @@ def product_formatter():
             shipping = (
                 f" + {vals['shipping']} shipping" if vals['shipping'] != "N/A" else ""
             )
-            lines.append(f"{flag} {vals['price']}{shipping}")
+            extra_parts = []
+            if code in profits:
+                extra_parts.append(f"Profit: {profits[code]}")
+            if code in margins:
+                extra_parts.append(f"Margin: {margins[code]}")
+            extra = f" ({', '.join(extra_parts)})" if extra_parts else ""
+            lines.append(f"{flag} {vals['price']}{shipping}{extra}")
         return "\n".join(lines)
 
     # expose for external use
