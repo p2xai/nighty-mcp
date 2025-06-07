@@ -62,3 +62,9 @@ def test_clean_removes_keyword_on_line():
     text = "Line1\nkeyword on sale\nLine2"
     cleaned = _clean_text(text)
     assert re.search(r"keyword on", cleaned, re.I) is None
+
+
+def test_parse_prices_ignores_non_country_line():
+    text = "Gross Weight: 0.2kg"
+    result = parse_prices(text)
+    assert result == {}
