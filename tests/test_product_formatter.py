@@ -1,5 +1,6 @@
 import builtins
 import importlib
+import asyncio
 import re
 import sys
 import types
@@ -17,6 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import product_formatter
 
 parse_prices = product_formatter.parse_prices
+parse_profits = product_formatter.parse_profits
+parse_margins = product_formatter.parse_margins
+format_description = product_formatter.format_description
 
 
 def _clean_text(text: str) -> str:
@@ -68,3 +72,31 @@ def test_parse_prices_ignores_non_country_line():
     text = "Gross Weight: 0.2kg"
     result = parse_prices(text)
     assert result == {}
+
+
+def test_parse_profits_and_margins():
+    text = (
+        "USA $99 shipping $10, UK £80 shipping £5\n"
+        "Profit Per Unit (Hause): $11/$12\n"
+        "Margin: 5%/6%"
+    )
+    prices = parse_prices(text)
+    order = list(prices.keys())
+    profits = parse_profits(text, order)
+    margins = parse_margins(text, order)
+    assert profits == {"USA": "$11", "UK": "$12"}
+    assert margins == {"USA": "5%", "UK": "6%"}
+
+
+def test_format_description_includes_profit_margin():
+    product_formatter.call_mcp = lambda *a, **k: "Test"
+    text = (
+        "USA $99 shipping $10, UK £80 shipping £5\n"
+        "Profit Per Unit (Hause): $11/$12\n"
+        "Margin: 5%/6%\n"
+        "Amazing Item"
+    )
+    result = asyncio.run(format_description(text))
+    lines = result.splitlines()
+    assert lines[3] == "\U0001F1FA\U0001F1F8 $99 + $10 shipping (Profit: $11, Margin: 5%)"
+    assert lines[4] == "\U0001F1EC\U0001F1E7 £80 + £5 shipping (Profit: $12, Margin: 6%)"
