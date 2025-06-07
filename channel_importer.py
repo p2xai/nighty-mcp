@@ -18,6 +18,8 @@ if str(_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_MODULE_DIR))
 
 # store formatter module in builtins so nested callbacks always find it
+if not hasattr(builtins, 'product_formatter'):
+    builtins.product_formatter = None
 product_formatter = getattr(builtins, 'product_formatter', None)
 if product_formatter is None:
     try:
