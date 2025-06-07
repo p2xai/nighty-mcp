@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import builtins
 
 # Ensure this script's directory is on sys.path so sibling modules load
 # correctly when executed from elsewhere.
@@ -16,12 +17,15 @@ _MODULE_DIR = Path(__file__).resolve().parent
 if str(_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_MODULE_DIR))
 
-product_formatter = None
-try:
-    import product_formatter as _pf
-    product_formatter = _pf
-except Exception:  # pragma: no cover - safe fallback if anything goes wrong
-    product_formatter = False
+# store formatter module in builtins so nested callbacks always find it
+product_formatter = getattr(builtins, 'product_formatter', None)
+if product_formatter is None:
+    try:
+        import product_formatter as _pf
+        product_formatter = _pf
+    except Exception:  # pragma: no cover - safe fallback if anything goes wrong
+        product_formatter = False
+    builtins.product_formatter = product_formatter
 
 @nightyScript(
     name="Channel Importer",
@@ -265,16 +269,16 @@ def channel_importer():
                 text = remove_lines_with_words(text, opts['omit_words'])
                 for old, new in opts['replacements'].items():
                     text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
-                pf = globals().get('product_formatter')
+                pf = getattr(builtins, 'product_formatter', None)
                 if opts.get('format_product'):
                     if pf is None:
                         try:
                             import importlib
                             pf = importlib.import_module('product_formatter')
-                            globals()['product_formatter'] = pf
+                            builtins.product_formatter = pf
                         except Exception:
                             pf = False
-                            globals()['product_formatter'] = False
+                            builtins.product_formatter = False
                     if pf and hasattr(pf, 'format_description'):
                         text = await pf.format_description(text)
                 trend_line = f"Tendencia [{get_message_date(msg)}]"
@@ -322,8 +326,6 @@ def channel_importer():
             import_history[(opts['source_id'], opts['dest_id'])] = latest_time
             save_import_history()
         return latest_time
-
-
 
 
     def parse_replacements(value: str):
@@ -376,366 +378,215 @@ def channel_importer():
         usage="--source <src_id> --dest <dest_id> [--limit <n>] [--skip w1,w2] [--replace old=new] [--remove-lines 1,2] [--omit-lines-with w1,w2] [--after YYYY-MM-DD] [--before YYYY-MM-DD] [--include-files] [--signature text] [--mention-role id1,id2] [--format-product]"
     )
     async def importmsgs(ctx, *, args: str):
-        await ctx.message.delete()
-        if args.strip() == "stop":
-            if scheduled_jobs:
-                for data in scheduled_jobs.values():
-                    data['task'].cancel()
-                scheduled_jobs.clear()
-                await ctx.send("Todas las importaciones programadas fueron detenidas.")
-            else:
-                await ctx.send("No hay importaciones programadas.")
-            return
         parts = shlex.split(args)
         opts, error = parse_arguments(parts)
         if error:
             await ctx.send(error)
             return
-        if opts['source_id'] is None or opts['dest_id'] is None:
-            await ctx.send("Debes especificar --source y --dest.")
+        if opts["source_id"] is None or opts["dest_id"] is None:
+            await ctx.send("Debes indicar --source y --dest.")
             return
-        await do_import(opts, ctx)
+        await ctx.message.delete()
+        latest = await do_import(opts, ctx)
+        if latest:
+            await ctx.send(f"Importados mensajes hasta {latest:%Y-%m-%d %H:%M}")
+        elif latest is None:
+            await ctx.send("No se copiaron mensajes.")
+        else:
+            await ctx.send("Hubo un error durante la importación.")
 
     @bot.command(
         name="scheduleimport",
-        description="Programa la importación periódica de mensajes.",
+        description="Programa importaciones recurrentes.",
         usage="--source <src_id> --dest <dest_id> [opciones] [--interval h] [--format-product]"
     )
     async def scheduleimport(ctx, *, args: str):
-        await ctx.message.delete()
         parts = shlex.split(args)
-        interval = 24
-        if '--interval' in parts:
-            idx = parts.index('--interval')
-            if idx + 1 < len(parts):
-                val = parts[idx + 1]
-                del parts[idx:idx + 2]
-                try:
-                    interval = float(val)
-                except ValueError:
-                    await ctx.send("Valor de --interval inválido.")
-                    return
         opts, error = parse_arguments(parts)
         if error:
             await ctx.send(error)
             return
-        if opts['source_id'] is None or opts['dest_id'] is None:
-            await ctx.send("Debes especificar --source y --dest.")
+        interval_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--interval' and idx + 1 < len(parts)), None)
+        interval = float(interval_val) if interval_val and interval_val.replace('.', '', 1).isdigit() else None
+        if opts["source_id"] is None or opts["dest_id"] is None or interval is None:
+            await ctx.send("Debes indicar --source, --dest e --interval.")
             return
-        key = (opts['source_id'], opts['dest_id'])
-        if key in scheduled_jobs:
-            scheduled_jobs[key]['task'].cancel()
-        job_opts = opts.copy()
-        if not job_opts.get('after_date'):
-            stored = import_history.get(key)
-            if stored:
-                job_opts['after_date'] = stored
+        await ctx.message.delete()
+        src = opts["source_id"]
+        dst = opts["dest_id"]
 
-        async def loop_job():
+        async def periodic():
             while True:
-                new_time = await do_import(job_opts)
-                if new_time:
-                    scheduled_jobs[key]['last_time'] = new_time
-                    job_opts['after_date'] = new_time
+                await do_import(opts)
                 await asyncio.sleep(interval * 3600)
 
-        task = asyncio.create_task(loop_job())
-        scheduled_jobs[key] = {
-            "task": task,
-            "last_time": job_opts.get('after_date')
-        }
-        await ctx.send(
-            f"Importación programada cada {interval}h para {key[0]} -> {key[1]}."
-        )
+        existing = scheduled_jobs.get((src, dst))
+        if existing:
+            existing["task"].cancel()
+        task = asyncio.create_task(periodic())
+        scheduled_jobs[(src, dst)] = {"task": task, "last_time": None}
+        await ctx.send(f"Programada importación cada {interval} horas.")
+
+    @bot.command(name="stopimport", description="Detiene importaciones programadas.", usage="[--source <src_id> --dest <dest_id>]")
+    async def stopimport(ctx, *, args: str = ""):
+        parts = shlex.split(args)
+        src_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--source' and idx + 1 < len(parts)), None)
+        dst_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--dest' and idx + 1 < len(parts)), None)
+
+        src = int(src_val) if src_val and src_val.isdigit() else None
+        dst = int(dst_val) if dst_val and dst_val.isdigit() else None
+
+        if src and dst:
+            job = scheduled_jobs.pop((src, dst), None)
+            if job:
+                job["task"].cancel()
+                await ctx.send("Importación programada detenida.")
+            else:
+                await ctx.send("No había importación para esos IDs.")
+        else:
+            for job in scheduled_jobs.values():
+                job["task"].cancel()
+            scheduled_jobs.clear()
+            await ctx.send("Todas las importaciones programadas se han detenido.")
+
+    @bot.command(name="status", description="Muestra importaciones programadas.", usage="")
+    async def status(ctx):
+        lines = []
+        for (src, dst), data in scheduled_jobs.items():
+            last = data["last_time"]
+            last_str = f"{last:%Y-%m-%d %H:%M}" if last else "N/A"
+            lines.append(f"{src} -> {dst} (última: {last_str})")
+        if not lines:
+            lines = ["No hay importaciones programadas."]
+        await ctx.send("\n".join(lines))
 
     @bot.command(
         name="rolepost",
-        description="Publica un mensaje con reacciones que otorgan roles",
-        usage="--channel <id> --role <id> --emoji <emoji> [--role id2 --emoji e2 ...] --text \"mensaje\""
+        description="Crea un mensaje para asignar roles con reacciones.",
+        usage="--channel <id> --role <role_id> --emoji 🙂 [--role id2 --emoji 😀 ...] --text \"mensaje\""
     )
     async def rolepost(ctx, *, args: str):
-        await ctx.message.delete()
         parts = shlex.split(args)
-
-        def consume(opt):
-            if opt in parts:
-                idx = parts.index(opt)
-                if idx + 1 < len(parts):
-                    val = parts[idx + 1]
-                    del parts[idx:idx + 2]
-                    return val
-            return None
-
-        ch_val = consume('--channel')
-        text_val = consume('--text')
+        chan_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--channel' and idx + 1 < len(parts)), None)
+        text_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--text' and idx + 1 < len(parts)), None)
 
         roles = []
         emojis = []
-        while '--role' in parts and '--emoji' in parts:
-            r_val = consume('--role')
-            e_val = consume('--emoji')
-            if not r_val or not e_val:
-                break
-            try:
-                roles.append(int(r_val))
-            except ValueError:
-                await ctx.send("ID de rol inválido.")
-                return
-            emojis.append(normalize_emoji(e_val))
+        idx = 0
+        while idx < len(parts):
+            if parts[idx] == '--role' and idx + 1 < len(parts):
+                roles.append(parts[idx + 1])
+                idx += 2
+            elif parts[idx] == '--emoji' and idx + 1 < len(parts):
+                emojis.append(parts[idx + 1])
+                idx += 2
+            else:
+                idx += 1
 
-        if not roles or len(roles) != len(emojis):
-            await ctx.send("Debes especificar pares de --role y --emoji.")
+        if not chan_val or not text_val or len(roles) != len(emojis):
+            await ctx.send("Argumentos inválidos.")
             return
 
-        channel = bot.get_channel(int(ch_val)) if ch_val else ctx.channel
+        channel = bot.get_channel(int(chan_val))
         if not channel:
-            await ctx.send("Canal inválido.")
+            await ctx.send("No pude acceder al canal.")
             return
 
-        message = await channel.send(text_val or "Reacciona para obtener roles")
-        for emoji_val in emojis:
-            try:
-                await message.add_reaction(emoji_val)
-                await asyncio.sleep(0.3)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                await ctx.send("No pude añadir la reacción.")
-        reaction_roles[message.id] = {
-            "channel_id": channel.id,
-            "pairs": [
-                {"role_id": rid, "emoji": str(em)} for rid, em in zip(roles, emojis)
-            ],
-        }
-        rolepost_store[message.id] = {
-            "channel_id": channel.id,
-            "pairs": [
-                {"role_id": rid, "emoji": str(em)} for rid, em in zip(roles, emojis)
-            ],
-            "active": True,
-        }
+        message = await channel.send(text_val)
+        for role_id, emoji_str in zip(roles, emojis):
+            rolepost_store[message.id] = {
+                "channel_id": channel.id,
+                "pairs": [{"role_id": int(role_id), "emoji": normalize_emoji(emoji_str)}],
+                "active": True,
+            }
+            reaction_roles[message.id] = {
+                "channel_id": channel.id,
+                "pairs": [{"role_id": int(role_id), "emoji": normalize_emoji(emoji_str)}],
+            }
         save_roleposts()
-        await ctx.send("Mensaje creado.")
+        await ctx.send(f"Rolepost creado con ID {message.id}.")
 
     @bot.command(
         name="delrolepost",
-        description="Elimina un rolepost existente",
-        usage="--message <id> [--channel <chan_id>]",
+        description="Elimina un rolepost para que no aparezca en status.",
+        usage="--message <msg_id> [--channel <id>]"
     )
     async def delrolepost(ctx, *, args: str):
-        await ctx.message.delete()
         parts = shlex.split(args)
+        msg_id_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--message' and idx + 1 < len(parts)), None)
+        chan_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--channel' and idx + 1 < len(parts)), None)
 
-        def consume(opt):
-            if opt in parts:
-                idx = parts.index(opt)
-                if idx + 1 < len(parts):
-                    val = parts[idx + 1]
-                    del parts[idx:idx + 2]
-                    return val
-            return None
-
-        msg_val = consume('--message')
-        ch_val = consume('--channel')
-        if not msg_val:
-            await ctx.send('Debes especificar --message <id>.')
-            return
-        try:
-            msg_id = int(msg_val)
-        except ValueError:
-            await ctx.send('ID de mensaje inválido.')
+        if not msg_id_val or not msg_id_val.isdigit():
+            await ctx.send("ID de mensaje inválido.")
             return
 
-        data = reaction_roles.pop(msg_id, None)
-        if not data and msg_id not in rolepost_store:
-            await ctx.send('No existe un rolepost con ese ID.')
-            return
-        if data is None:
-            data = rolepost_store.get(msg_id)
-        if msg_id in rolepost_store:
-            rolepost_store[msg_id]['active'] = False
-        else:
-            rolepost_store[msg_id] = {
-                'channel_id': data.get('channel_id'),
-                'pairs': data.get('pairs', []),
-                'active': False,
-            }
-        save_roleposts()
-        
-        # intentar borrar el mensaje
-        channel = None
-        if ch_val:
-            try:
-                channel = bot.get_channel(int(ch_val))
-            except Exception:
-                channel = None
-        if not channel:
-            ch_id = data.get('channel_id')
-            channel = bot.get_channel(ch_id) if ch_id else None
+        msg_id = int(msg_id_val)
+        channel = bot.get_channel(int(chan_val)) if chan_val and chan_val.isdigit() else None
+
         if channel:
             try:
                 msg = await channel.fetch_message(msg_id)
                 await msg.delete()
-            except asyncio.CancelledError:
-                raise
             except Exception:
                 pass
-        await ctx.send(f"Rolepost {msg_id} eliminado.")
+
+        stored = rolepost_store.pop(msg_id, None)
+        reaction_roles.pop(msg_id, None)
+        if stored:
+            save_roleposts()
+            await ctx.send("Rolepost eliminado.")
+        else:
+            await ctx.send("No se encontró el rolepost.")
 
     @bot.command(
         name="loadrolepost",
-        description="Recarga un rolepost almacenado",
-        usage="--message <id> [--channel <chan_id>]",
+        description="Carga un rolepost previamente guardado.",
+        usage="--message <msg_id> [--channel <id>]"
     )
     async def loadrolepost(ctx, *, args: str):
-        await ctx.message.delete()
         parts = shlex.split(args)
+        msg_id_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--message' and idx + 1 < len(parts)), None)
+        chan_val = next((parts[idx + 1] for idx, p in enumerate(parts) if p == '--channel' and idx + 1 < len(parts)), None)
 
-        def consume(opt):
-            if opt in parts:
-                idx = parts.index(opt)
-                if idx + 1 < len(parts):
-                    val = parts[idx + 1]
-                    del parts[idx:idx + 2]
-                    return val
-            return None
-
-        msg_val = consume('--message')
-        ch_val = consume('--channel')
-        if not msg_val:
-            await ctx.send('Debes especificar --message <id>.')
+        if not msg_id_val or not msg_id_val.isdigit():
+            await ctx.send("ID de mensaje inválido.")
             return
-        try:
-            msg_id = int(msg_val)
-        except ValueError:
-            await ctx.send('ID de mensaje inválido.')
+        if not chan_val or not chan_val.isdigit():
+            await ctx.send("ID de canal inválido.")
+            return
+
+        msg_id = int(msg_id_val)
+        channel = bot.get_channel(int(chan_val))
+        if not channel:
+            await ctx.send("No pude acceder al canal.")
             return
 
         data = rolepost_store.get(msg_id)
         if not data:
-            await ctx.send('No existe un rolepost almacenado con ese ID.')
+            await ctx.send("Rolepost no encontrado.")
             return
 
-        channel = None
-        if ch_val:
-            try:
-                channel = bot.get_channel(int(ch_val))
-            except Exception:
-                channel = None
-        if not channel:
-            channel = bot.get_channel(data.get('channel_id'))
-        if not channel:
-            await ctx.send('Canal inválido.')
-            return
-
-        try:
-            await channel.fetch_message(msg_id)
-        except Exception:
-            await ctx.send('No se encontró el mensaje.')
-            return
-
-        reaction_roles[msg_id] = {
-            'channel_id': channel.id,
-            'pairs': data['pairs'],
+        message = await channel.send("Rolepost restaurado.")
+        rolepost_store[message.id] = {
+            "channel_id": channel.id,
+            "pairs": data["pairs"],
+            "active": True,
         }
-        rolepost_store[msg_id]['active'] = True
+        reaction_roles[message.id] = {
+            "channel_id": channel.id,
+            "pairs": data["pairs"],
+        }
         save_roleposts()
-        await ctx.send(f"Rolepost {msg_id} cargado.")
-
-    @bot.command(
-        name="stopimport",
-        description="Detiene la importación programada.",
-        usage="[--source <src_id> --dest <dest_id>]"
-    )
-    async def stopimport(ctx, *, args: str = ""):
-        await ctx.message.delete()
-        parts = shlex.split(args)
-
-        def consume_option(opt):
-            if opt in parts:
-                idx = parts.index(opt)
-                if idx + 1 < len(parts):
-                    val = parts[idx + 1]
-                    del parts[idx:idx + 2]
-                    return val
-            return None
-
-        src_val = consume_option('--source')
-        dst_val = consume_option('--dest')
-
-        if src_val and dst_val:
-            try:
-                src = int(src_val)
-                dst = int(dst_val)
-            except ValueError:
-                await ctx.send("IDs inválidos.")
-                return
-            key = (src, dst)
-            data = scheduled_jobs.pop(key, None)
-            if data:
-                data['task'].cancel()
-                await ctx.send(f"Importación {src}->{dst} detenida.")
-            else:
-                await ctx.send("No existe importación programada para esos canales.")
-        else:
-            for data in scheduled_jobs.values():
-                data['task'].cancel()
-            scheduled_jobs.clear()
-            await ctx.send("Todas las importaciones programadas fueron detenidas.")
-
-    @bot.command(
-        name="status",
-        description="Muestra las importaciones programadas y los roleposts activos.",
-        usage=""
-    )
-    async def status(ctx):
-        await ctx.message.delete()
-        lines = []
-        if scheduled_jobs:
-            lines.append("Importaciones programadas:")
-            for (src, dst), data in scheduled_jobs.items():
-                lt = data.get('last_time')
-                if isinstance(lt, datetime):
-                    ts = lt.strftime('%Y-%m-%d %H:%M')
-                    lines.append(f"- {src} -> {dst} (última: {ts})")
-                else:
-                    lines.append(f"- {src} -> {dst}")
-        else:
-            lines.append("No hay importaciones programadas.")
-        if import_history:
-            lines.append("Historial de importaciones:")
-            for (src, dst), ts in import_history.items():
-                if isinstance(ts, datetime):
-                    ts_str = ts.strftime('%Y-%m-%d %H:%M')
-                else:
-                    ts_str = str(ts)
-                lines.append(f"- {src} -> {dst}: {ts_str}")
-        if reaction_roles:
-            lines.append("Roleposts activos:")
-            for mid, data in reaction_roles.items():
-                pairs = data['pairs']
-                info = ', '.join(f"{p['emoji']}→{p['role_id']}" for p in pairs)
-                lines.append(f"- mensaje {mid}: {info}")
-        else:
-            lines.append("No hay roleposts activos.")
-        inactive = {m: d for m, d in rolepost_store.items() if not d.get('active')}
-        if inactive:
-            lines.append("Roleposts almacenados:")
-            for mid, data in inactive.items():
-                pairs = data['pairs']
-                info = ', '.join(f"{p['emoji']}→{p['role_id']}" for p in pairs)
-                lines.append(f"- mensaje {mid}: {info}")
-        await ctx.send('\n'.join(lines))
+        await ctx.send(f"Rolepost cargado con ID {message.id}.")
 
     @bot.event
     async def on_raw_reaction_add(payload):
         data = reaction_roles.get(payload.message_id)
         if not data or not payload.guild_id:
             return
-        pairs = data['pairs']
         pair = None
         emoji_val = normalize_emoji(str(payload.emoji))
-        for p in pairs:
+        for p in data['pairs']:
             if emoji_val == p["emoji"]:
                 pair = p
                 break
