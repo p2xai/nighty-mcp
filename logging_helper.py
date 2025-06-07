@@ -5,15 +5,10 @@ This module provides ``log`` that tries to use that parameter when
 available and falls back to a plain ``print`` call otherwise.
 """
 
-import inspect
-
-_HAS_TYPE_PARAM = 'type_' in inspect.signature(print).parameters
-
-
 def log(msg, type_: str = "INFO") -> None:
-    """Print a message using Nighty's log format when possible."""
-    if _HAS_TYPE_PARAM:
+    """Print ``msg`` using the ``type_`` keyword if ``print`` supports it."""
+    try:  # pragma: no cover - depends on Nighty's monkey patching
         print(msg, type_=type_)
-    else:
+    except TypeError:
         print(msg)
 
