@@ -21,6 +21,7 @@ parse_prices = product_formatter.parse_prices
 parse_profits = product_formatter.parse_profits
 parse_margins = product_formatter.parse_margins
 parse_delivery_times = product_formatter.parse_delivery_times
+parse_shipping_times = product_formatter.parse_shipping_times
 parse_weight = product_formatter.parse_weight
 parse_units_sold = product_formatter.parse_units_sold
 format_description = product_formatter.format_description
@@ -104,6 +105,15 @@ def test_parse_profits_and_margins():
     assert margins == {"USA": "5%", "UK": "6%"}
 
 
+def test_parse_shipping_times():
+    text = (
+        "USA $99 shipping $10, UK £80 shipping £5\n"
+        "Shipping Time: 6-9 days/7-12 days"
+    )
+    result = parse_shipping_times(text)
+    assert result == "6-9 days/7-12 days"
+
+
 def test_format_description_includes_profit_margin():
     product_formatter.call_mcp = lambda *a, **k: "Test"
     text = (
@@ -134,6 +144,7 @@ def test_format_description_includes_extra_details():
     product_formatter.call_mcp = lambda *a, **k: "Test"
     text = (
         "USA $99 shipping $10, UK £80 shipping £5\n"
+        "Shipping Time: 5-8 days\n"
         "To USA: 6-15 days/To EU: 6-9 days\n"
         "Gross Weight: 0.2kg\n"
         "Units Sold: 300\n"
@@ -146,6 +157,7 @@ def test_format_description_includes_extra_details():
     assert lines[5] == "Delivery: To USA: 6-15 days/To EU: 6-9 days"
     assert lines[6] == "Gross Weight: 0.2kg"
     assert lines[7] == "Units Sold: 300"
+    assert lines[8] == "Shipping Time: 5-8 days"
 
 
 def test_format_description_cleans_keyword_line_and_brand():
