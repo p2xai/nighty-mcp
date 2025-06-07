@@ -77,6 +77,19 @@ def test_parse_prices_ignores_non_country_line():
     assert result == {}
 
 
+def test_parse_prices_ignores_weight_among_prices():
+    text = (
+        "USA $99 shipping $10\n"
+        "Gross Weight: 0.2kg\n"
+        "UK £80 shipping £5"
+    )
+    result = parse_prices(text)
+    assert result == {
+        "USA": {"price": "$99", "shipping": "$10"},
+        "UK": {"price": "£80", "shipping": "£5"},
+    }
+
+
 def test_parse_profits_and_margins():
     text = (
         "USA $99 shipping $10, UK £80 shipping £5\n"
