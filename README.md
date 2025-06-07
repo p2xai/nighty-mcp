@@ -18,12 +18,16 @@ A local server that uses OpenRouter's API to generate code for Nighty scripts. T
 ## Setup
 
 1. Clone this repository
-2. Install dependencies:
+2. Install Node dependencies:
    ```bash
    npm install
    ```
-3. Add your OpenRouter API key to the `.env` file
-4. Start the server:
+3. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Add your OpenRouter API key to the `.env` file
+5. Start the server:
    ```bash
    node server.js
    ```
@@ -31,14 +35,15 @@ A local server that uses OpenRouter's API to generate code for Nighty scripts. T
 ## Python Dependencies
 
 The helper scripts such as `channel_importer.py` and `product_formatter.py`
-require Python 3 with the `requests` library installed. Install it with:
+require Python 3 with several libraries installed. Install them using:
 
 ```bash
-pip install requests
+pip install -r requirements.txt
 ```
 
-If `requests` is not available, product formatting will fall back to a basic
-"Unknown" result when querying the local MCP server.
+This file includes `requests`, `discord.py` and `emoji`. If `requests` is not
+available, product formatting will fall back to a basic "Unknown" result when
+querying the local MCP server.
 
 ## Usage
 
