@@ -1,4 +1,5 @@
 # Nighty Code Generation Server
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/p2xai/nighty-mcp)
 
 A local server that uses OpenRouter's API to generate code for Nighty scripts. This server acts as a bridge between Nighty and various AI models available through OpenRouter.
 
