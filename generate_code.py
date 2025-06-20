@@ -42,13 +42,17 @@ def generate_code_script():
 
     # ---------- Helper: clean up response ---------- #
     def clean_response(text: str) -> str:
-        """Clean up the response by removing explanatory text and fixing code blocks."""
-        # Remove any explanatory text after the code block
+        """Extract the final code block from the response if present.
+
+        If the detected code block is empty, fall back to returning the raw
+        response so that potential error messages aren't lost.
+        """
         if "```" in text:
-            # Find the last code block
             code_blocks = re.findall(r"```(?:python)?\n(.*?)```", text, re.DOTALL)
             if code_blocks:
-                return code_blocks[-1].strip()
+                cleaned = code_blocks[-1].strip()
+                if cleaned:
+                    return cleaned
         return text.strip()
 
     # ---------- Blocking HTTP POST to MCP ---------- #
