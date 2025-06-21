@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>MCP Server Logs</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #bb86fc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; border: 1px solid #333; text-align: left; vertical-align: top; }
+        th { background-color: #1f1f1f; color: #bb86fc; }
+        tr:nth-child(even) { background-color: #1e1e1e; }
+        tr:hover { background-color: #333; }
+        tr.pending { opacity: 0.6; font-style: italic; }
+        .status-200, .status-201, .status-204 { color: #03dac6; }
+        .status-400, .status-404, .status-500 { color: #cf6679; }
+        .prompt { max-width: 300px; word-wrap: break-word; }
+        .file { max-width: 250px; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <h1>MCP Server Logs</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Status</th>
+                <th>Method</th>
+                <th>Endpoint</th>
+                <th>Model</th>
+                <th>AI Wait</th>
+                <th class="file">File Path</th>
+                <th>Size</th>
+                <th class="prompt">Prompt</th>
+            </tr>
+        </thead>
+        <tbody id="log-body">
+            <!-- Log rows will be inserted here by JavaScript -->
+        </tbody>
+    </table>
+    <script>
+        function fetchLogs() {
+            fetch('/api/logs')
+                .then(response => response.json())
+                .then(logs => {
+                    const logBody = document.getElementById('log-body');
+                    logBody.innerHTML = ''; // Clear existing logs
+
+                    logs.forEach(log => {
+                        const row = document.createElement('tr');
+                        if (log.status === 'pending') {
+                            row.classList.add('pending');
+                        }
+
+                        row.innerHTML = `
+                            <td>${new Date(log.timestamp).toLocaleString()}</td>
+                            <td class="status-${log.status}">${log.status || ''}</td>
+                            <td>${log.method || ''}</td>
+                            <td>${log.url || ''}</td>
+                            <td>${log.model || ''}</td>
+                            <td>${log.aiTime || ''}</td>
+                            <td>${log.file || ''}</td>
+                            <td>${log.size || ''}</td>
+                            <td class="prompt">${log.prompt || ''}</td>
+                        `;
+                        logBody.appendChild(row);
+                    });
+                })
+                .catch(error => console.error('Error fetching logs:', error));
+        }
+
+        // Fetch logs immediately and then every 5 seconds
+        fetchLogs();
+        setInterval(fetchLogs, 5000);
+    </script>
+</body>
+</html>

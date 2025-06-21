@@ -5,8 +5,8 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node start-server.js",
+    "dev": "nodemon start-server.js"
   },
   "keywords": [
     "nighty",
