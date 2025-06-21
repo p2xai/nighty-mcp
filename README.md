@@ -9,8 +9,7 @@ A local server that uses OpenRouter's API to generate code for Nighty scripts. T
 - **Live Log Viewer**: A web-based UI at `http://localhost:3000/logs` shows all server requests, including pending tasks, AI response times, and generated file paths.
 - **Code Versioning**: Automatically saves every generated script to a `versions/` directory, preventing data loss.
 - **Context-Aware Prompts**: Uses local documentation files (`context/`) to provide the AI with relevant context for more accurate code generation.
-- **Cross-Platform**: Works on Windows, macOS, and Linux.
-
+  
 ## Setup
 
 1.  **Prerequisites**: Make sure you have [Node.js](https://nodejs.org/) (v16+) installed.
