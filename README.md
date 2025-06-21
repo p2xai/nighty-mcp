@@ -17,7 +17,7 @@ A local server that uses OpenRouter's API to generate code for Nighty scripts. T
 
 2.  **Clone the Repository**:
     ```bash
-    git clone <your-repo-url>
+    git clone https://github.com/p2xai/nighty-mcp.git
     cd nighty-mcp
     ```
 

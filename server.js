@@ -288,7 +288,7 @@ Generate ${language || 'python'} code. Return ONLY the code block.
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://yourdomain.com',
+        'HTTP-Referer': 'https://example.com',
         'X-Title': 'Nighty MCP'
       },
       body: JSON.stringify({
@@ -468,7 +468,7 @@ Generate fixed ${language} code. Return ONLY the code block.
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://yourdomain.com',
+        'HTTP-Referer': 'https://example.com',
         'X-Title': 'Nighty MCP'
       },
       body: JSON.stringify({
