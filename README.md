@@ -1,8 +1,7 @@
-# Nighty MCP: AI Code Generation Server
+# Nighty Code Generation Server
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/p2xai/nighty-mcp)
 
-Nighty MCP (Model Control Program) is a powerful local server designed to bridge your development environment with cutting-edge AI models from OpenRouter. It provides a robust backend for generating, fixing, and versioning code, complete with a live web interface to monitor all activity.
-
- <!-- Replace with a real screenshot URL -->
+A local server that uses OpenRouter's API to generate code for Nighty scripts. This server acts as a bridge between Nighty and various AI models available through OpenRouter.
 
 ## Features
 
